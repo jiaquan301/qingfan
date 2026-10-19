@@ -490,99 +490,429 @@ class Window(Gtk.ApplicationWindow):
         if not title:
             self.entry.grab_focus()
             return
+        if self.search_entry.get_text():
+            self.search_entry.set_text('')
+        previous_ids = {task['id'] for task in self.model.pending_tasks}
         self.model.add(title)
-        if not self.model.current_id:
-            self.model.current_id = self.model.tasks[-1]['id']
+        if self.model.current_id is None:
+            new_task = next((task for task in self.model.pending_tasks
+                             if task['id'] not in previous_ids), None)
+            if new_task is not None:
+                self.model.current_id = new_task['id']
         self.entry.set_text('')
         self._save()
         self.refresh_tasks()
         self.refresh_clock()
         self.entry.grab_focus()
 
-    def refresh_tasks(self):
-        self._finish_edit()
-        for child in self.rows_box.get_children():
-            child.destroy()
-        self.count_label.set_text(f'{len(self.model.tasks)} 项任务')
-        if not self.model.tasks:
-            empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-            empty.set_margin_top(12)
-            empty.set_margin_bottom(12)
-            empty.pack_start(label('把第一件要做的事写在上面', 'empty-title'), False, False, 0)
-            empty.pack_start(label('一次只专注一件事', 'empty-subtitle'), False, False, 0)
-            self.rows_box.pack_start(empty, False, False, 0)
-        for item in self.model.tasks:
-            self.rows_box.pack_start(self._task_widget(item), False, False, 0)
-        count = min(4, len(self.model.tasks))
-        self.scroller.set_size_request(-1, count * self.TASK_ROW_HEIGHT if count else 49)
-        self.rows_box.show_all()
-        self._adjust_height()
+    def _query(self):
+        return self.search_entry.get_text().strip().casefold()
 
-    def _task_widget(self, task):
+    def toggle_search(self, *_):
+        if self.search_entry.get_visible():
+            self.search_entry.set_text('')
+            self.search_entry.hide()
+            self._search_visible = False
+            self.search_button.set_tooltip_text('搜索任务  Ctrl+F')
+            self.refresh_tasks()
+            self.entry.grab_focus()
+            return
+        self.show_search()
+
+    def show_search(self):
+        if self.compact:
+            self._set_mode(False)
+        self._search_visible = True
+        self.search_entry.show()
+        self.search_button.set_tooltip_text('关闭搜索')
+        self.search_entry.grab_focus()
+        self.refresh_tasks()
+
+    def on_search_changed(self, *_):
+        self.refresh_tasks()
+
+    def _clear_search_icon(self, entry, icon_pos, *_):
+        if icon_pos == Gtk.EntryIconPosition.SECONDARY:
+            entry.set_text('')
+            entry.grab_focus()
+
+    def toggle_completed(self, *_):
+        self._completed_expanded = not self._completed_expanded
+        self.refresh_tasks()
+
+    def _sync_completed_visibility(self, matching_completed_count):
+        query = self._query()
+        if matching_completed_count == 0:
+            self.completed_toggle.hide()
+            self.completed_rows_box.hide()
+            return
+        self.completed_toggle.show()
+        expanded = self._completed_expanded or bool(query)
+        self.completed_toggle_icon.set_from_icon_name(
+            'pan-down-symbolic' if expanded else 'pan-end-symbolic', Gtk.IconSize.MENU)
+        if expanded:
+            self.completed_rows_box.set_no_show_all(False)
+            self.completed_rows_box.show_all()
+            self.completed_rows_box.set_no_show_all(True)
+        else:
+            self.completed_rows_box.hide()
+
+    def refresh_tasks(self):
+        if self._refreshing_tasks:
+            return
+        self._refreshing_tasks = True
+        try:
+            self._finish_edit()
+            for child in self.rows_box.get_children():
+                child.destroy()
+            for child in self.completed_rows_box.get_children():
+                child.destroy()
+            self._task_row_by_id = {}
+
+            pending = self.model.pending_tasks
+            completed = self.model.completed_tasks
+            query = self._query()
+            matching_pending = [task for task in pending if query in task['title'].casefold()]
+            matching_completed = [task for task in completed if query in task['title'].casefold()]
+            self.count_label.set_text(f'{len(pending)} 项待办 · {len(completed)} 项已完成')
+            self.completed_toggle_label.set_text(f'已完成（{len(completed)}）')
+
+            if not matching_pending:
+                if query and not matching_completed:
+                    empty_text = '没有找到匹配的任务'
+                elif query:
+                    empty_text = '没有匹配的待办任务'
+                elif not pending and completed:
+                    empty_text = '所有任务已完成'
+                elif not pending:
+                    empty_text = '还没有任务，添加第一件要做的事'
+                else:
+                    empty_text = '没有待办任务'
+                self.pending_empty.set_text(empty_text)
+                self.pending_empty.show()
+            else:
+                self.pending_empty.hide()
+
+            for task in matching_pending:
+                row = self._task_widget(task, completed=False)
+                self.rows_box.pack_start(row, False, False, 0)
+                self._task_row_by_id[task['id']] = row
+            self.rows_box.show_all()
+
+            for task in matching_completed:
+                row = self._task_widget(task, completed=True)
+                self.completed_rows_box.pack_start(row, False, False, 0)
+                self._task_row_by_id[task['id']] = row
+            self.completed_rows_box.set_no_show_all(False)
+            self.completed_rows_box.show_all()
+            self.completed_rows_box.set_no_show_all(True)
+            self._sync_completed_visibility(len(matching_completed))
+            self._update_task_primary_action()
+        finally:
+            self._refreshing_tasks = False
+        if not self.compact:
+            GLib.idle_add(self._scroll_current_into_view)
+
+    def _scroll_current_into_view(self):
+        row = self._task_row_by_id.get(self.model.current_id)
+        if row is None or row.get_parent() != self.rows_box:
+            return False
+        adjustment = self.scroller.get_vadjustment()
+        allocation = row.get_allocation()
+        value = adjustment.get_value()
+        page = adjustment.get_page_size()
+        if allocation.y < value:
+            adjustment.set_value(allocation.y)
+        elif allocation.y + allocation.height > value + page:
+            adjustment.set_value(max(0, allocation.y + allocation.height - page))
+        return False
+
+    def _task_widget(self, task, completed=False):
         tid = task['id']
-        active = tid == self.model.current_id
-        row = style(Gtk.Box(spacing=4), 'task-row')
+        done = bool(task['done'])
+        active = tid == self.model.current_id and not done
+        row = style(Gtk.Box(spacing=5), 'task-row')
         if active:
             style(row, 'is-current')
+        if done:
+            style(row, 'task-completed')
 
-        # Radio semantics in a compact checkbox: exactly one selected task;
-        # checked does NOT mean deleted or completed.
         check = Gtk.CheckButton()
         check.set_valign(Gtk.Align.CENTER)
-        check.set_active(active)
-        check.set_tooltip_text('取消选中任务' if active else '选择此任务专注')
-        check.get_accessible().set_name('取消选中任务' if active else '选择此任务专注')
-        # Switching during an active interval silently discards work, so
-        # selection remains locked until the user pauses the timer.
-        check.set_sensitive(not (self.model.phase == 'focus' and self.model.running()))
-        check.connect('toggled', lambda widget: self.select_task(tid if widget.get_active() else None))
+        check.set_active(done)
+        check.set_tooltip_text('恢复为待办任务' if done else '标记任务完成')
+        check.get_accessible().set_name('恢复为待办任务' if done else '标记任务完成')
+        check.set_sensitive(not (active and self.model.phase == 'focus' and self.model.running()))
+        check.connect('toggled', lambda widget: self.complete_task(tid, widget.get_active()))
         row.pack_start(check, False, False, 0)
 
         targets = [Gtk.TargetEntry.new('UTF8_STRING', Gtk.TargetFlags.SAME_APP, 0)]
-        handle = icon_button('list-drag-handle-symbolic', '拖动排序；Alt+↑ / Alt+↓ 调整顺序')
-        style(handle, 'drag-handle')
-        handle._qingfan_task_id = tid
-        handle.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, targets, Gdk.DragAction.MOVE)
-        handle.connect('drag-data-get', self._drag_task, tid)
-        handle.connect('key-press-event', self._reorder_key, tid)
-        row.pack_start(handle, False, False, 0)
-        row.drag_dest_set(Gtk.DestDefaults.ALL, targets, Gdk.DragAction.MOVE)
-        row.connect('drag-data-received', self._drop_task, tid)
-
         stack = Gtk.Stack()
         stack.set_transition_type(Gtk.StackTransitionType.NONE)
         stack.set_hexpand(True)
         pick = style(Gtk.Button(), 'task-pick')
         pick.set_relief(Gtk.ReliefStyle.NONE)
         pick.set_hexpand(True)
-        pick.set_tooltip_text(task['title'] + '\n点击编辑任务名称')
-        text = label(task['title'], xalign=0)
+        pick.set_tooltip_text('点击选择为当前任务' if not done else '已完成任务；取消勾选可恢复')
+        text = label(task['title'], 'task-title-text', xalign=0)
         text.set_hexpand(True)
         text.set_ellipsize(Pango.EllipsizeMode.END)
-        text.set_max_width_chars(16)
+        text.set_max_width_chars(36)
         pick.add(text)
+        pick.connect('clicked', lambda *_: self.select_task(tid) if not done else None)
+
         field = Gtk.Entry(text=task['title'])
         field.set_width_chars(1)
         field.set_max_length(120)
         field.get_accessible().set_name('任务名称')
-        field.set_tooltip_text('回车或失焦保存，Esc 取消')
+        field.set_tooltip_text('回车或离开输入框保存，Esc 取消')
         stack.add_named(pick, 'title')
         stack.add_named(field, 'edit')
-        pick.connect('clicked', lambda *_: self._begin_edit(tid, field, stack, text))
         field.connect('activate', lambda *_: self._finish_edit())
         field.connect('focus-out-event', lambda *_: self._finish_edit())
         field.connect('key-press-event', self._edit_key)
         row.pack_start(stack, True, True, 0)
 
-        count = label(f"{task.get('pomodoros', 0)} 次", 'task-pomodoros')
-        count.set_tooltip_text('这项任务累计完成的专注轮数')
-        row.pack_start(count, False, False, 0)
-        row.pack_end(icon_button('edit-delete-symbolic', '删除任务，可撤销',
-                                lambda *_: self.remove_task(tid)), False, False, 0)
-        # Gtk.Button owns its own GDK event window; accept drop on its surface.
-        pick.drag_dest_set(Gtk.DestDefaults.ALL, targets, Gdk.DragAction.MOVE)
-        pick.connect('drag-data-received', self._drop_task, tid)
+        pomodoros = task.get('pomodoros', 0)
+        if pomodoros > 0:
+            count = label(f'🍅 {pomodoros}', 'task-pomodoros')
+            count.set_tooltip_text('这项任务累计完成的专注轮数')
+            row.pack_start(count, False, False, 0)
+
+        # Filtered rows have no unambiguous global reorder position.
+        if not done and not self._query():
+            handle = icon_button('list-drag-handle-symbolic', '拖动排序；Alt+↑ / Alt+↓ 调整顺序')
+            style(handle, 'drag-handle')
+            handle._qingfan_task_id = tid
+            handle.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, targets, Gdk.DragAction.MOVE)
+            handle.connect('drag-data-get', self._drag_task, tid)
+            handle.connect('key-press-event', self._reorder_key, tid)
+            row.pack_start(handle, False, False, 0)
+            row.drag_dest_set(Gtk.DestDefaults.ALL, targets, Gdk.DragAction.MOVE)
+            row.connect('drag-data-received', self._drop_task, tid)
+
+        menu_button = Gtk.MenuButton()
+        menu_button.set_relief(Gtk.ReliefStyle.NONE)
+        menu_button.set_image(Gtk.Image.new_from_icon_name('view-more-symbolic', Gtk.IconSize.BUTTON))
+        menu_button.set_tooltip_text('更多任务操作')
+        menu_button.get_accessible().set_name('更多任务操作')
+        style(menu_button, 'icon-button', 'task-menu-button')
+        menu = Gtk.Menu()
+        rename_item = Gtk.MenuItem(label='重命名')
+        rename_item.connect('activate', lambda *_: self._begin_edit(tid, field, stack, text))
+        menu.append(rename_item)
+        delete_item = Gtk.MenuItem(label='删除任务')
+        delete_item.connect('activate', lambda *_: self.remove_task(tid))
+        menu.append(delete_item)
+        menu.show_all()
+        menu_button.set_popup(menu)
+        row.pack_end(menu_button, False, False, 0)
         return row
+
+    def _update_task_primary_action(self):
+        if not hasattr(self, 'task_primary_button'):
+            return
+        if self.model.running():
+            action = '返回专注' if self.model.phase == 'focus' else '返回休息'
+            enabled = True
+        elif self.model.phase == 'focus' and self.model.current_id is None:
+            action = '先选择任务'
+            enabled = False
+        elif self.model.phase == 'focus':
+            action = '继续专注' if self.model.seconds() < self.model.phase_duration else '开始专注'
+            enabled = True
+        else:
+            action = '继续休息' if self.model.seconds() < self.model.phase_duration else '开始休息'
+            enabled = True
+        self.task_primary_button.set_label(action)
+        self.task_primary_button.set_sensitive(enabled)
+
+    def task_primary_action(self, *_):
+        if self.model.running():
+            self._set_mode(True)
+            return
+        if self.model.phase == 'focus' and self.model.current_id is None:
+            self._show_status('请先选择一项待办任务。')
+            return
+        self.toggle_timer()
+
+    def _show_status(self, message):
+        self.status_label.set_text(message)
+        self.status_label.show()
+        if self._status_source is not None:
+            GLib.source_remove(self._status_source)
+        self._status_source = GLib.timeout_add_seconds(4, self._clear_status)
+
+    def _clear_status(self):
+        self._status_source = None
+        self.status_label.hide()
+        return False
+
+    def _has_partial_focus(self):
+        return (self.model.phase == 'focus' and not self.model.running()
+                and self.model.seconds() < self.model.phase_duration - 0.5)
+
+    def _confirm_action(self, title, body, affirmative='继续'):
+        dialog = Gtk.MessageDialog(
+            transient_for=self, flags=Gtk.DialogFlags.MODAL,
+            message_type=Gtk.MessageType.QUESTION, buttons=Gtk.ButtonsType.NONE,
+            text=title)
+        dialog.format_secondary_text(body)
+        dialog.add_button('取消', Gtk.ResponseType.CANCEL)
+        dialog.add_button(affirmative, Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        answer = dialog.run()
+        dialog.destroy()
+        return answer == Gtk.ResponseType.OK
+
+    def _confirm_discard_partial(self, action):
+        if not self._has_partial_focus():
+            return True
+        return self._confirm_action(
+            f'{action}？',
+            '当前专注已暂停但尚未完成。继续操作会放弃本轮计时，已完成的番茄记录不会改变。',
+            '放弃本轮并继续')
+
+    def select_task(self, tid):
+        if tid == self.model.current_id:
+            return
+        if self.model.phase == 'focus' and self.model.running():
+            self._show_status('专注进行中，请先暂停，再切换任务。')
+            return
+        if self._has_partial_focus() and not self._confirm_discard_partial('切换任务'):
+            return
+        if self.model.select(tid):
+            self._finish_edit()
+            self._save()
+            self.refresh_tasks()
+            self.refresh_clock()
+
+    def _next_pending_after(self, ordered_before, task_id):
+        remaining_ids = {task['id'] for task in self.model.pending_tasks}
+        old_ids = [task['id'] for task in ordered_before]
+        try:
+            index = old_ids.index(task_id)
+        except ValueError:
+            index = -1
+        for candidate in old_ids[index + 1:]:
+            if candidate in remaining_ids:
+                return candidate
+        return next((task['id'] for task in self.model.pending_tasks), None)
+
+    def _capture_undo_state(self, task_id=None):
+        timer = None
+        if task_id == self.model.current_id and self.model.phase == 'focus' and not self.model.running():
+            timer = {
+                'phase': self.model.phase,
+                'remaining': self.model.seconds(),
+                'phase_duration': self.model.phase_duration,
+                'completed_rounds': self.model.completed_rounds,
+            }
+        return {
+            'tasks': [dict(task) for task in self.model.tasks],
+            'current_id': self.model.current_id,
+            'timer': timer,
+        }
+
+    def _record_undo(self, snapshot, message):
+        self._undo_state = snapshot
+        self.undo_label.set_text(message)
+        self.undo_bar.set_no_show_all(False)
+        self.undo_bar.show_all()
+        if self._undo_source is not None:
+            GLib.source_remove(self._undo_source)
+        self._undo_source = GLib.timeout_add_seconds(7, self._dismiss_undo)
+
+    def complete_task(self, tid, done):
+        task = next((item for item in self.model.tasks if item['id'] == tid), None)
+        if task is None or task['done'] == bool(done):
+            return
+        was_current = self.model.current_id == tid
+        if done and was_current and self.model.phase == 'focus' and self.model.running():
+            self._show_status('当前任务正在专注，请先暂停后再标记完成。')
+            self.refresh_tasks()
+            return
+        if done and was_current and not self._confirm_discard_partial('标记任务完成'):
+            self.refresh_tasks()
+            return
+
+        pending_before = self.model.pending_tasks
+        snapshot = self._capture_undo_state(tid if was_current else None)
+        if done and was_current and self._has_partial_focus():
+            self.model.reset()
+        if not self.model.complete(tid, done):
+            return
+        if done and was_current:
+            next_id = self._next_pending_after(pending_before, tid)
+            if next_id is not None:
+                self.model.select(next_id)
+            elif self.model.phase == 'focus':
+                self.model.reset()
+        self._record_undo(snapshot, '任务已标记完成' if done else '任务已恢复到待办')
+        self._deleted_task = None
+        self._save()
+        self.refresh_tasks()
+        self.refresh_clock()
+
+    def remove_task(self, tid):
+        task = next((item for item in self.model.tasks if item['id'] == tid), None)
+        if task is None:
+            return
+        was_current = self.model.current_id == tid
+        if was_current and self.model.phase == 'focus' and self.model.running():
+            self._show_status('当前任务正在专注，请先暂停后再删除。')
+            return
+        if was_current and not self._confirm_discard_partial('删除当前任务'):
+            return
+        pending_before = self.model.pending_tasks
+        snapshot = self._capture_undo_state(tid if was_current else None)
+        index = next(i for i, item in enumerate(self.model.tasks) if item['id'] == tid)
+        self._deleted_task = (task.copy(), index, was_current)
+        if was_current and self._has_partial_focus():
+            self.model.reset()
+        self.model.delete(tid)
+        if was_current:
+            next_id = self._next_pending_after(pending_before, tid)
+            if next_id is not None:
+                self.model.select(next_id)
+            elif self.model.phase == 'focus':
+                self.model.reset()
+        self._record_undo(snapshot, '任务已删除')
+        self._save()
+        self.refresh_tasks()
+        self.refresh_clock()
+
+    def _dismiss_undo(self):
+        self._undo_source = None
+        self._undo_state = None
+        self._deleted_task = None
+        self.undo_bar.hide()
+        self.undo_bar.set_no_show_all(True)
+        return False
+
+    def undo_delete(self, *_):
+        if self._undo_state is None:
+            return
+        snapshot = self._undo_state
+        self._undo_state = None
+        if self._undo_source is not None:
+            GLib.source_remove(self._undo_source)
+            self._undo_source = None
+        self.model.tasks = [dict(task) for task in snapshot['tasks']]
+        self.model.current_id = snapshot['current_id']
+        timer = snapshot.get('timer')
+        if timer:
+            self.model.phase = timer['phase']
+            self.model.remaining = timer['remaining']
+            self.model.phase_duration = timer['phase_duration']
+            self.model.completed_rounds = timer['completed_rounds']
+            self.model.deadline = None
+        self._deleted_task = None
+        self.undo_bar.hide()
+        self.undo_bar.set_no_show_all(True)
+        self._save()
+        self.refresh_tasks()
+        self.refresh_clock()
 
     def _begin_edit(self, tid, field, stack, text):
         self._finish_edit()
@@ -596,17 +926,23 @@ class Window(Gtk.ApplicationWindow):
             return False
         tid, field, stack, text = self._editing
         self._editing = None
+        changed = False
         if not cancel:
+            before = next((t['title'] for t in self.model.tasks if t['id'] == tid), None)
             self.model.rename(tid, field.get_text())
+            after = next((t['title'] for t in self.model.tasks if t['id'] == tid), None)
+            changed = before != after
         task = next((t for t in self.model.tasks if t['id'] == tid), None)
         if task:
             text.set_text(task['title'])
             field.set_text(task['title'])
-            text.get_parent().set_tooltip_text(task['title'] + '\n点击编辑任务名称')
+            text.get_parent().set_tooltip_text(task['title'] + '\n点击选择为当前任务')
         stack.set_visible_child_name('title')
-        if not cancel and save:
+        if not cancel and save and changed:
             self._save()
             self.refresh_clock()
+            if not self._refreshing_tasks:
+                GLib.idle_add(self.refresh_tasks)
         return False
 
     def _edit_key(self, _field, event):
@@ -616,6 +952,8 @@ class Window(Gtk.ApplicationWindow):
         return False
 
     def _reorder_key(self, _widget, event, tid):
+        if self._query():
+            return False
         if event.state & Gdk.ModifierType.MOD1_MASK and event.keyval in (Gdk.KEY_Up, Gdk.KEY_Down):
             self.model.move(tid, -1 if event.keyval == Gdk.KEY_Up else 1)
             self._save()
@@ -631,6 +969,9 @@ class Window(Gtk.ApplicationWindow):
         data.set_text(task_id, -1)
 
     def _drop_task(self, widget, context, _x, y, data, _info, timestamp, target_id):
+        if self._query():
+            Gtk.drag_finish(context, False, False, timestamp)
+            return
         source = Gtk.drag_get_source_widget(context)
         source_id = getattr(source, '_qingfan_task_id', None)
         if source_id is None or data.get_text() != source_id:
@@ -786,7 +1127,18 @@ class Window(Gtk.ApplicationWindow):
         if ctrl and event.keyval in (Gdk.KEY_l, Gdk.KEY_L):
             self.toggle_mode()
             return True
+        if ctrl and event.keyval in (Gdk.KEY_f, Gdk.KEY_F):
+            self.show_search()
+            return True
         if event.keyval == Gdk.KEY_Escape and not self.compact:
+            if self.search_entry.get_visible():
+                if self.search_entry.get_text():
+                    self.search_entry.set_text('')
+                else:
+                    self.search_entry.hide()
+                    self._search_visible = False
+                    self.entry.grab_focus()
+                return True
             self._set_mode(True)
             return True
         focus = self.get_focus()
@@ -808,6 +1160,9 @@ class Window(Gtk.ApplicationWindow):
         if self._undo_source is not None:
             GLib.source_remove(self._undo_source)
             self._undo_source = None
+        if self._status_source is not None:
+            GLib.source_remove(self._status_source)
+            self._status_source = None
         if self._clock_source is not None:
             GLib.source_remove(self._clock_source)
             self._clock_source = None
