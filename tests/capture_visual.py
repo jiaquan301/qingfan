@@ -30,6 +30,7 @@ def capture(window, name):
     if native is None:
         raise RuntimeError(f'{name}: window did not realize')
     width, height = window.get_size()
+    print(f'RENDERED_WINDOW_{name.upper()}_SIZE={width}x{height}', flush=True)
     frame = Gdk.pixbuf_get_from_window(native, 0, 0, width, height)
     if frame is None:
         raise RuntimeError(f'{name}: GTK could not capture window surface')
