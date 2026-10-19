@@ -52,7 +52,11 @@ def icon_button(name, tooltip, callback=None, css='icon-button'):
 class Window(Gtk.ApplicationWindow):
     WIDTH = 332
     COMPACT_HEIGHT = 310
-    TASK_ROW_HEIGHT = 42
+    TASK_ROW_HEIGHT = 48
+    TASK_WINDOW_WIDTH = 400
+    TASK_WINDOW_MIN_WIDTH = 360
+    TASK_WINDOW_MIN_HEIGHT = 360
+    TASK_WINDOW_MAX_HEIGHT = 620
 
     def __init__(self, application):
         # Register/show the window only after every widget has been built.
@@ -75,8 +79,15 @@ class Window(Gtk.ApplicationWindow):
         self.compact = True
         self.pinned = self.model.display["pinned"]
         self._editing = None
+        self._refreshing_tasks = False
+        self._task_row_by_id = {}
+        self._completed_expanded = False
+        self._manager_size = None
+        self._search_visible = False
+        self._undo_state = None
         self._deleted_task = None
         self._undo_source = None
+        self._status_source = None
         self._settings_dialog = None
         self._last_clock_text = None
         self._last_phase = None
@@ -183,27 +194,42 @@ class Window(Gtk.ApplicationWindow):
         self.footer_label.set_margin_top(12)
         hero.pack_start(self.footer_label, False, False, 0)
 
-        # Task area grows to fit its content until six rows; no oversized blank panel.
+        # Task management is a separate, useful workspace. Only the list scrolls;
+        # the title, add field, undo feedback and primary action remain visible.
         self.task_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        base.pack_start(self.task_panel, False, False, 0)
+        self.task_panel.set_vexpand(True)
+        base.pack_start(self.task_panel, True, True, 0)
         separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         self.task_panel.pack_start(separator, False, False, 0)
 
-        inside = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=11)
+        inside = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         inside.set_margin_start(18)
         inside.set_margin_end(18)
-        inside.set_margin_top(13)
-        inside.set_margin_bottom(15)
-        self.task_panel.pack_start(inside, False, False, 0)
+        inside.set_margin_top(14)
+        inside.set_margin_bottom(14)
+        inside.set_vexpand(True)
+        self.task_panel.pack_start(inside, True, True, 0)
 
         section = Gtk.Box(spacing=8)
         inside.pack_start(section, False, False, 0)
         section.pack_start(label('任务清单', 'section-title', xalign=0), False, False, 0)
-        self.count_label = label('0 项', 'task-count')
+        self.count_label = label('0 项待办 · 0 项已完成', 'task-count')
         section.pack_start(self.count_label, False, False, 0)
         section.pack_start(Gtk.Box(), True, True, 0)
+        self.search_button = icon_button('system-search-symbolic', '搜索任务  Ctrl+F', self.toggle_search)
+        section.pack_end(self.search_button, False, False, 0)
 
-        input_row = Gtk.Box(spacing=6)
+        self.search_entry = Gtk.Entry()
+        self.search_entry.set_placeholder_text('搜索任务名称')
+        self.search_entry.set_icon_from_icon_name(Gtk.EntryIconPosition.SECONDARY, 'edit-clear-symbolic')
+        self.search_entry.set_icon_activatable(Gtk.EntryIconPosition.SECONDARY, True)
+        self.search_entry.set_tooltip_text('按任务名称搜索；搜索不会改变任务顺序')
+        self.search_entry.set_no_show_all(True)
+        self.search_entry.connect('changed', self.on_search_changed)
+        self.search_entry.connect('icon-release', self._clear_search_icon)
+        inside.pack_start(self.search_entry, False, False, 0)
+
+        input_row = Gtk.Box(spacing=8)
         inside.pack_start(input_row, False, False, 0)
         self.entry = Gtk.Entry()
         self.entry.set_placeholder_text('接下来要完成什么？')
@@ -217,9 +243,45 @@ class Window(Gtk.ApplicationWindow):
         self.scroller = style(Gtk.ScrolledWindow(), 'list-scroller')
         self.scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.scroller.set_shadow_type(Gtk.ShadowType.NONE)
-        inside.pack_start(self.scroller, False, False, 0)
-        self.rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        self.scroller.add(self.rows_box)
+        self.scroller.set_hexpand(True)
+        self.scroller.set_vexpand(True)
+        self.scroller.set_size_request(-1, 140)
+        inside.pack_start(self.scroller, True, True, 0)
+
+        self.list_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.scroller.add(self.list_content)
+        self.pending_empty = label('', 'empty-title', xalign=0)
+        self.pending_empty.set_line_wrap(True)
+        self.pending_empty.set_margin_top(10)
+        self.pending_empty.set_margin_bottom(10)
+        self.pending_empty.set_no_show_all(True)
+        self.list_content.pack_start(self.pending_empty, False, False, 0)
+
+        self.rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        self.list_content.pack_start(self.rows_box, False, False, 0)
+
+        self.completed_toggle = Gtk.Button()
+        self.completed_toggle.set_relief(Gtk.ReliefStyle.NONE)
+        self.completed_toggle.set_no_show_all(True)
+        style(self.completed_toggle, 'completed-toggle')
+        completed_header = Gtk.Box(spacing=8)
+        self.completed_toggle_icon = Gtk.Image.new_from_icon_name('pan-end-symbolic', Gtk.IconSize.MENU)
+        completed_header.pack_start(self.completed_toggle_icon, False, False, 0)
+        self.completed_toggle_label = label('已完成（0）', 'completed-label', xalign=0)
+        completed_header.pack_start(self.completed_toggle_label, False, False, 0)
+        completed_header.pack_start(Gtk.Box(), True, True, 0)
+        self.completed_toggle.add(completed_header)
+        self.completed_toggle.connect('clicked', self.toggle_completed)
+        self.list_content.pack_start(self.completed_toggle, False, False, 0)
+
+        self.completed_rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        self.completed_rows_box.set_no_show_all(True)
+        self.list_content.pack_start(self.completed_rows_box, False, False, 0)
+
+        self.status_label = label('', 'task-status', xalign=0)
+        self.status_label.set_line_wrap(True)
+        self.status_label.set_no_show_all(True)
+        inside.pack_start(self.status_label, False, False, 0)
 
         self.undo_bar = Gtk.Box(spacing=8)
         self.undo_bar.set_no_show_all(True)
@@ -230,51 +292,75 @@ class Window(Gtk.ApplicationWindow):
         self.undo_bar.pack_end(undo, False, False, 0)
         inside.pack_start(self.undo_bar, False, False, 0)
 
+        footer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.footer_hint = label('Ctrl+F 搜索 · Esc 收起清单', 'footer-hint', xalign=0)
+        footer.pack_start(self.footer_hint, False, False, 0)
+        self.task_primary_button = Gtk.Button(label='开始专注')
+        style(self.task_primary_button, 'primary', 'task-primary')
+        self.task_primary_button.set_hexpand(True)
+        self.task_primary_button.connect('clicked', self.task_primary_action)
+        footer.pack_start(self.task_primary_button, False, False, 0)
+        inside.pack_start(footer, False, False, 0)
+
+    def _manager_default_height(self):
+        screen = Gdk.Screen.get_default()
+        if screen is None:
+            return 560
+        try:
+            monitor = screen.get_primary_monitor()
+            area = screen.get_monitor_workarea(monitor) if monitor >= 0 else None
+            available = area.height if area is not None else screen.get_height()
+        except (AttributeError, TypeError, RuntimeError):
+            available = screen.get_height()
+        return max(self.TASK_WINDOW_MIN_HEIGHT,
+                   min(560, self.TASK_WINDOW_MAX_HEIGHT, int(available * 0.72)))
+
     def _adjust_height(self):
         if self.compact:
-            height = self.COMPACT_HEIGHT
-        else:
-            visible = min(4, len(self.model.tasks))
-            # Add task panel header/input/spacing + task rows, cap content size.
-            height = 260 + (visible * self.TASK_ROW_HEIGHT if visible else 0)
-            if self.undo_bar.get_visible():
-                height += 49
-        # A size hint alone may be ignored when the hidden manager is
-        # re-mapped. Set an actual content minimum for the compact drawer.
-        # Header-bar and client-side shadow consume additional outer pixels.
-        # Allocate enough total geometry for the list's full client area.
-        width = self.WIDTH + 10 if not self.compact else self.WIDTH
-        self.set_size_request(width, height) if not self.compact else self.set_size_request(306, -1)
+            self.set_resizable(False)
+            self.set_size_request(306, -1)
+            self.set_default_size(self.WIDTH, self.COMPACT_HEIGHT)
+            self.resize(self.WIDTH, self.COMPACT_HEIGHT)
+            return
+        self.set_resizable(True)
+        self.set_size_request(self.TASK_WINDOW_MIN_WIDTH, self.TASK_WINDOW_MIN_HEIGHT)
+        if self._manager_size is None:
+            self._manager_size = (self.TASK_WINDOW_WIDTH, self._manager_default_height())
+        width, height = self._manager_size
         self.set_default_size(width, height)
         self.resize(width, height)
 
     def _set_mode(self, compact):
         self._finish_edit()
+        if compact and not self.compact and self.get_visible():
+            width, height = self.get_size()
+            if width >= self.TASK_WINDOW_MIN_WIDTH and height >= self.TASK_WINDOW_MIN_HEIGHT:
+                self._manager_size = (width, height)
         self.compact = compact
         if compact:
             self.task_panel.hide()
             self.hero.show()
+            self.set_resizable(False)
             if hasattr(self, 'orb_window'):
                 self.orb_window.set_keep_above(self.pinned)
                 self.orb_window.present()
                 self.hide()
+            self._adjust_height()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-list-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('展开任务清单  Ctrl+L')
             self.list_button.get_style_context().remove_class('selected')
         else:
             if hasattr(self, 'orb_window'):
                 self.orb_window.hide()
-            was_mapped = self.get_mapped()
-            if was_mapped:
-                self.hide()
             self.hero.hide()
-            self.refresh_tasks()
-            self.show()  # Recompute checkbox sensitivity after timer state changes.
+            self._adjust_height()
+            self.show()
             self.task_panel.show_all()
+            self.refresh_tasks()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('收起任务清单  Ctrl+L')
             style(self.list_button, 'selected')
-        self._adjust_height()
+            self._update_task_primary_action()
 
     def toggle_mode(self, *_):
         self._set_mode(not self.compact)
@@ -314,8 +400,8 @@ class Window(Gtk.ApplicationWindow):
             return
         was_running = self.model.running()
         self.model.start_pause()
-        if not was_running and self.model.running() and self.model.phase == 'focus':
-            self._set_mode(True)  # Timer and one task are the entire focus UI.
+        if not was_running and self.model.running():
+            self._set_mode(True)  # Return to the floating timer for focus or rest.
         self._save()
         self.refresh_clock()
 
@@ -393,6 +479,8 @@ class Window(Gtk.ApplicationWindow):
         if action != self._last_running:
             self.go_btn.set_label(action)
             self._last_running = action
+        if hasattr(self, 'task_primary_button'):
+            self._update_task_primary_action()
         if hasattr(self, 'orb_window'):
             self.orb_window.update(action)
         return True
