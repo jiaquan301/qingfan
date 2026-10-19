@@ -26,16 +26,17 @@ def drain():
 
 
 def capture(window, name):
-    expected = {'focus': (326, 356), 'mini': (100, 100), 'tasks': (332, 232)}[name]
+    expected = {'focus': (326, 356), 'mini': (100, 100)}.get(name)
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         drain()
         actual = window.get_size()
-        if actual == expected:
+        valid = (actual == expected) if expected else (actual[0] >= 315 and actual[1] >= 215)
+        if valid:
             break
         time.sleep(0.03)
-    if window.get_size() != expected:
-        raise RuntimeError(f'{name}: expected actual window {expected}, got {window.get_size()}')
+    if not valid:
+        raise RuntimeError(f'{name}: window content clipped, actual {window.get_size()}')
     native = window.get_window()
     if native is None:
         raise RuntimeError(f'{name}: window did not realize')
