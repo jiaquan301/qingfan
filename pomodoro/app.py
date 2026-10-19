@@ -303,33 +303,61 @@ class Window(Gtk.ApplicationWindow):
         footer.pack_start(self.task_primary_button, False, False, 0)
         inside.pack_start(footer, False, False, 0)
 
-    def _manager_default_height(self):
+    def _monitor_workarea(self):
         screen = Gdk.Screen.get_default()
         if screen is None:
-            return 560
+            return None
         try:
             monitor = screen.get_primary_monitor()
-            area = screen.get_monitor_workarea(monitor) if monitor >= 0 else None
-            available = area.height if area is not None else screen.get_height()
+            return screen.get_monitor_workarea(monitor) if monitor >= 0 else None
         except (AttributeError, TypeError, RuntimeError):
-            available = screen.get_height()
+            return None
+
+    def _manager_max_height(self):
+        area = self._monitor_workarea()
+        screen = Gdk.Screen.get_default()
+        available = area.height if area is not None else (screen.get_height() if screen else 900)
         return max(self.TASK_WINDOW_MIN_HEIGHT,
-                   min(560, self.TASK_WINDOW_MAX_HEIGHT, int(available * 0.72)))
+                   min(self.TASK_WINDOW_MAX_HEIGHT, int(available * 0.72)))
+
+    def _manager_default_height(self):
+        return max(self.TASK_WINDOW_MIN_HEIGHT,
+                   min(560, self._manager_max_height()))
+
+    def _apply_geometry_hints(self, min_width, min_height, max_width, max_height):
+        geometry = Gdk.Geometry()
+        geometry.min_width = min_width
+        geometry.min_height = min_height
+        geometry.max_width = max_width
+        geometry.max_height = max_height
+        self.set_geometry_hints(
+            None, geometry, Gdk.WindowHints.MIN_SIZE | Gdk.WindowHints.MAX_SIZE)
 
     def _adjust_height(self):
         if self.compact:
             self.set_resizable(False)
+            # Clear the task-window constraints before returning to the compact
+            # clock; stale minimum sizes otherwise prevent the window shrinking.
+            self.set_geometry_hints(None, Gdk.Geometry(), Gdk.WindowHints(0))
             self.set_size_request(306, -1)
             self.set_default_size(self.WIDTH, self.COMPACT_HEIGHT)
             self.resize(self.WIDTH, self.COMPACT_HEIGHT)
             return
         self.set_resizable(True)
         self.set_size_request(self.TASK_WINDOW_MIN_WIDTH, self.TASK_WINDOW_MIN_HEIGHT)
+        area = self._monitor_workarea()
+        screen = Gdk.Screen.get_default()
+        max_width = max(self.TASK_WINDOW_MIN_WIDTH,
+                        area.width if area is not None else (screen.get_width() if screen else 1200))
+        self._apply_geometry_hints(
+            self.TASK_WINDOW_MIN_WIDTH, self.TASK_WINDOW_MIN_HEIGHT,
+            max_width, self._manager_max_height())
         if self._manager_size is None:
             self._manager_size = (self.TASK_WINDOW_WIDTH, self._manager_default_height())
         width, height = self._manager_size
-        self.set_default_size(width, height)
-        self.resize(width, height)
+        self._manager_size = (min(width, max_width), min(height, self._manager_max_height()))
+        self.set_default_size(*self._manager_size)
+        self.resize(*self._manager_size)
 
     def _set_mode(self, compact):
         self._finish_edit()
