@@ -173,6 +173,10 @@ class GuiTests(unittest.TestCase):
         stack.get_child_by_name('title').clicked()
         self.assertEqual(self.window.model.current_id, second_id)
         self.assertIsNone(self.window._editing)
+        row = next(row for row in self.window.rows_box.get_children()
+                   if any(isinstance(child, Gtk.Stack)
+                          and child.get_child_by_name('title').get_child().get_text() == '检查材料'
+                          for child in row.get_children()))
         menu_button = next(child for child in row.get_children()
                            if isinstance(child, Gtk.MenuButton))
         rename = menu_button.get_popup().get_children()[0]
