@@ -1,4 +1,4 @@
-name: Qingfan 1.0 checks
+name: Qingfan desktop checks
 
 on:
   push:
@@ -25,3 +25,16 @@ jobs:
           QINGFAN_REQUIRE_GUI: "1"
           PYTHONDONTWRITEBYTECODE: "1"
         run: dbus-run-session -- xvfb-run -a ./verify.sh
+
+      - name: Capture full, mini and task GTK surfaces
+        env:
+          GSETTINGS_BACKEND: memory
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/capture_visual.py
+      - name: Save visual regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingfan-gtk-visual-check
+          path: visual-check/*.png
+          if-no-files-found: ignore
