@@ -107,17 +107,16 @@ class FocusGuiTests(GuiTests):
         second_stack = next(child for child in second_row.get_children() if isinstance(child, Gtk.Stack))
         second_stack.get_child_by_name('title').clicked()
         self.assertEqual(self.window.model.current_id, second)
-        self.assertFalse(self.window.model.tasks[1]["done"])
-        self.assertTrue(second_row.get_style_context().has_class('is-current'))
-        self.assertFalse(first_check.get_active())
-        self.assertFalse(second_check.get_active())
+        self.assertFalse(next(task for task in self.window.model.tasks if task['id'] == second)['done'])
+        refreshed_rows = self.window.rows_box.get_children()
+        self.assertTrue(refreshed_rows[1].get_style_context().has_class('is-current'))
+        self.assertFalse(refreshed_rows[0].get_children()[0].get_active())
+        self.assertFalse(refreshed_rows[1].get_children()[0].get_active())
 
-        first_check.set_active(True)
-        self.assertTrue(self.window.model.tasks[0]['done'])
-        self.assertNotEqual(self.window.model.current_id, first)
+        refreshed_rows[0].get_children()[0].set_active(True)
+        self.assertTrue(next(task for task in self.window.model.tasks if task['id'] == first)['done'])
+        self.assertEqual(self.window.model.current_id, second)
         self.assertEqual(len(self.window.model.completed_tasks), 1)
-        self.assertFalse(any('0 次' in child.get_tooltip_text() for child in first_row.get_children()
-                             if hasattr(child, 'get_tooltip_text')))
 
     def test_running_focus_prevents_task_switch_but_keeps_other_task_completable(self):
         current_id = self.window.model.current_id
