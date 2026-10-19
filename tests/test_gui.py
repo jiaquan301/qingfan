@@ -72,8 +72,11 @@ class GuiTests(unittest.TestCase):
     def editor(self, row=0):
         widgets = self.window.rows_box.get_children()[row].get_children()
         stack = next(w for w in widgets if isinstance(w, Gtk.Stack))
-        stack.get_child_by_name('title').clicked()
-        return stack.get_child_by_name('edit')
+        field = stack.get_child_by_name('edit')
+        title_button = stack.get_child_by_name('title')
+        self.window._begin_edit(self.window.model.pending_tasks[row]['id'],
+                                field, stack, title_button.get_child())
+        return field
 
     def test_inline_edit_save_and_escape_cancel(self):
         field = self.editor()
@@ -92,15 +95,24 @@ class GuiTests(unittest.TestCase):
         field.emit('activate')
         self.assertEqual(self.window.model.tasks[0]['title'], '写方案')
 
-    def test_delete_current_pauses_and_undo_restores(self):
-        tid = self.window.model.tasks[0]['id']
-        self.window.model.start_pause()
+    def test_delete_current_is_blocked_during_focus_then_undo_restores(self):
+        tid = self.window.model.current_id
+        self.window.model.start_pause(now=100)
+        self.window.remove_task(tid)
+        self.assertTrue(self.window.model.running())
+        self.assertEqual(self.window.model.current_id, tid)
+        self.assertEqual(len(self.window.model.pending_tasks), 3)
+
+        self.window.model.start_pause(now=101)
+        self.window.model.reset()
         self.window.remove_task(tid)
         self.assertFalse(self.window.model.running())
-        self.assertIsNone(self.window.model.current_id)
+        self.assertNotEqual(self.window.model.current_id, tid)
+        self.assertEqual(len(self.window.model.pending_tasks), 2)
         self.assertTrue(self.window.undo_bar.get_visible())
         self.window.undo_delete()
-        self.assertEqual(self.window.model.tasks[0]['id'], tid)
+        self.assertEqual([task['id'] for task in self.window.model.pending_tasks],
+                         [tid, *[task['id'] for task in self.window.model.pending_tasks if task['id'] != tid]])
         self.assertEqual(self.window.model.current_id, tid)
         self.assertFalse(self.window.model.running())
 
@@ -136,6 +148,37 @@ class GuiTests(unittest.TestCase):
             with self.assertRaisesRegex(TypeError, 'bad GTK call'):
                 Window(self.app)
         self.assertEqual(list(self.app.get_windows()), before)
+
+
+    def test_search_filters_without_changing_order_or_current_task(self):
+        ids = [task['id'] for task in self.window.model.pending_tasks]
+        current_id = self.window.model.current_id
+        self.window.show_search()
+        self.window.search_entry.set_text('发布')
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+        self.assertEqual(len(self.window.rows_box.get_children()), 1)
+        self.assertEqual(self.window.model.current_id, current_id)
+        self.assertEqual([task['id'] for task in self.window.model.pending_tasks], ids)
+        self.window.search_entry.set_text('no match')
+        self.assertEqual(len(self.window.rows_box.get_children()), 0)
+        self.assertIn('没有找到', self.window.pending_empty.get_text())
+        self.window.search_entry.set_text('')
+        self.assertEqual(len(self.window.rows_box.get_children()), 3)
+
+    def test_title_click_selects_but_rename_is_explicit_menu_action(self):
+        row = self.window.rows_box.get_children()[1]
+        stack = next(child for child in row.get_children() if isinstance(child, Gtk.Stack))
+        second_id = self.window.model.pending_tasks[1]['id']
+        stack.get_child_by_name('title').clicked()
+        self.assertEqual(self.window.model.current_id, second_id)
+        self.assertIsNone(self.window._editing)
+        menu_button = next(child for child in row.get_children()
+                           if isinstance(child, Gtk.MenuButton))
+        rename = menu_button.get_popup().get_children()[0]
+        rename.activate()
+        self.assertIsNotNone(self.window._editing)
+        self.window._finish_edit(cancel=True)
 
     def test_shared_application_stays_registered(self):
         self.assertIs(self.app, registered_test_application())
