@@ -989,60 +989,6 @@ class Window(Gtk.ApplicationWindow):
         self.refresh_tasks()
         return False
 
-    def select_task(self, tid):
-        if self.model.phase == 'focus' and self.model.running():
-            return  # Selection controls are also insensitive while running.
-        if self.model.select(tid):
-            self._finish_edit()
-            self._save()
-            self.refresh_tasks()
-            self.refresh_clock()
-
-    def remove_task(self, tid):
-        self._finish_edit()
-        index = next((i for i, t in enumerate(self.model.tasks) if t['id'] == tid), None)
-        if index is None:
-            return
-        self._deleted_task = (self.model.tasks[index].copy(), index, self.model.current_id == tid)
-        if tid == self.model.current_id and self.model.running():
-            self.model.start_pause()
-        self.model.delete(tid)
-        self._save()
-        self.refresh_tasks()
-        self.refresh_clock()
-        self.undo_bar.set_no_show_all(False)
-        self.undo_bar.show_all()
-        self._adjust_height()
-        if self._undo_source is not None:
-            GLib.source_remove(self._undo_source)
-        self._undo_source = GLib.timeout_add_seconds(7, self._dismiss_undo)
-
-    def _dismiss_undo(self):
-        self._undo_source = None
-        self._deleted_task = None
-        self.undo_bar.hide()
-        self.undo_bar.set_no_show_all(True)
-        self._adjust_height()
-        return False
-
-    def undo_delete(self, *_):
-        if self._deleted_task is None:
-            return
-        task, index, was_current = self._deleted_task
-        self._deleted_task = None
-        if self._undo_source is not None:
-            GLib.source_remove(self._undo_source)
-            self._undo_source = None
-        self.model.tasks.insert(min(index, len(self.model.tasks)), task)
-        if was_current and self.model.current_id is None and not task.get('done'):
-            self.model.current_id = task['id']
-        self.undo_bar.hide()
-        self.undo_bar.set_no_show_all(True)
-        self._adjust_height()
-        self._save()
-        self.refresh_tasks()
-        self.refresh_clock()
-
     def open_settings(self, *_):
         self._finish_edit()
         if self._settings_dialog is not None:
