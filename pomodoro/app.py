@@ -236,14 +236,17 @@ class Window(Gtk.ApplicationWindow):
         else:
             visible = min(4, len(self.model.tasks))
             # Add task panel header/input/spacing + task rows, cap content size.
-            height = 190 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
+            height = 260 + (visible * self.TASK_ROW_HEIGHT if visible else 0)
             if self.undo_bar.get_visible():
                 height += 49
         # A size hint alone may be ignored when the hidden manager is
         # re-mapped. Set an actual content minimum for the compact drawer.
-        self.set_size_request(self.WIDTH, height) if not self.compact else self.set_size_request(306, -1)
-        self.set_default_size(self.WIDTH, height)
-        self.resize(self.WIDTH, height)
+        # Header-bar and client-side shadow consume additional outer pixels.
+        # Allocate enough total geometry for the list's full client area.
+        width = self.WIDTH + 10 if not self.compact else self.WIDTH
+        self.set_size_request(width, height) if not self.compact else self.set_size_request(306, -1)
+        self.set_default_size(width, height)
+        self.resize(width, height)
 
     def _set_mode(self, compact):
         self._finish_edit()
