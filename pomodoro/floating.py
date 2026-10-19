@@ -8,7 +8,10 @@ from __future__ import annotations
 import math
 
 import gi
+# Without the Cairo foreign converter, PangoCairo callbacks fail silently on
+# GTK's draw signal and the entire clock face disappears.
 gi.require_version('PangoCairo', '1.0')
+gi.require_foreign('cairo')
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo
 
 
