@@ -39,6 +39,7 @@ class FocusOrb(Gtk.ApplicationWindow):
     def __init__(self, application, host):
         super().__init__(application=application, title='青番 · 专注')
         self.host = host
+        self.get_style_context().add_class('orb-window')
         self.mini = False
         self._last_button_event = None
         self.set_decorated(False)
@@ -240,6 +241,10 @@ class FocusOrb(Gtk.ApplicationWindow):
             return True
         if event.state & Gdk.ModifierType.CONTROL_MASK and event.keyval in (Gdk.KEY_l, Gdk.KEY_L):
             self.open_tasks()
+            return True
+        if event.state & Gdk.ModifierType.CONTROL_MASK and event.keyval in (Gdk.KEY_n, Gdk.KEY_N):
+            self.open_tasks()
+            self.host.entry.grab_focus()
             return True
         return False
 
