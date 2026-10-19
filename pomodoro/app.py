@@ -324,7 +324,7 @@ class Window(Gtk.ApplicationWindow):
 
     def _manager_default_height(self):
         return max(self.TASK_WINDOW_MIN_HEIGHT,
-                   min(560, self._manager_max_height()))
+                   min(520, self._manager_max_height()))
 
     def _apply_geometry_hints(self, min_width, min_height, max_width, max_height):
         geometry = Gdk.Geometry()
