@@ -20,10 +20,10 @@ if os.environ.get('QINGFAN_REQUIRE_GUI') == '1' and not HAS_DISPLAY:
 
 def create_test_application():
     app = Application()
-    # NON_UNIQUE only skips owning the well-known bus name. It does not change
-    # the object path exported on the shared session connection.
+    # Each fixture gets its own valid D-Bus name. Register as a normal
+    # unique app so Gtk.Application emits ::startup before windows are added.
     app.set_application_id(f'app.qingfan.Test.t{uuid.uuid4().hex}')
-    app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
+    app.set_flags(Gio.ApplicationFlags.FLAGS_NONE)
     return app
 
 
@@ -37,7 +37,7 @@ class GuiTests(unittest.TestCase):
         self.addCleanup(self.env.stop)
         self.app = create_test_application()
         self.addCleanup(self._cleanup_application)
-        self.app.register(None)
+        self.assertTrue(self.app.register(None))
         self.window = Window(self.app)
         self.addCleanup(self.window.destroy)
         self.window._set_mode(False)
