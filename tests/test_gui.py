@@ -96,6 +96,7 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.window.model.tasks[0]['title'], '写方案')
 
     def test_delete_current_is_blocked_during_focus_then_undo_restores(self):
+        original_ids = [task['id'] for task in self.window.model.pending_tasks]
         tid = self.window.model.current_id
         self.window.model.start_pause(now=100)
         self.window.remove_task(tid)
@@ -111,8 +112,7 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(len(self.window.model.pending_tasks), 2)
         self.assertTrue(self.window.undo_bar.get_visible())
         self.window.undo_delete()
-        self.assertEqual([task['id'] for task in self.window.model.pending_tasks],
-                         [tid, *[task['id'] for task in self.window.model.pending_tasks if task['id'] != tid]])
+        self.assertEqual([task['id'] for task in self.window.model.pending_tasks], original_ids)
         self.assertEqual(self.window.model.current_id, tid)
         self.assertFalse(self.window.model.running())
 
