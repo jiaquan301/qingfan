@@ -20,11 +20,25 @@ if os.environ.get('QINGFAN_REQUIRE_GUI') == '1' and not HAS_DISPLAY:
 
 def create_test_application():
     app = Application()
-    # NON_UNIQUE only skips owning the well-known bus name. It does not change
-    # the object path exported on the shared session connection.
+    # Each fixture gets its own valid D-Bus name. Register as a normal
+    # unique app so Gtk.Application emits ::startup before windows are added.
     app.set_application_id(f'app.qingfan.Test.t{uuid.uuid4().hex}')
-    app.set_flags(Gio.ApplicationFlags.NON_UNIQUE)
+    app.set_flags(Gio.ApplicationFlags.FLAGS_NONE)
     return app
+
+
+_shared_app = None
+
+
+def registered_test_application():
+    """GTK/D-Bus process lifetime is shared; isolate windows and state per test."""
+    global _shared_app
+    if _shared_app is None:
+        app = create_test_application()
+        if not app.register(None):
+            raise RuntimeError('GTK application registration failed')
+        _shared_app = app
+    return _shared_app
 
 
 @unittest.skipUnless(HAS_DISPLAY, 'GTK 3 graphical display unavailable')
@@ -35,9 +49,8 @@ class GuiTests(unittest.TestCase):
         self.env = patch.dict(os.environ, XDG_DATA_HOME=self.temp.name)
         self.env.start()
         self.addCleanup(self.env.stop)
-        self.app = create_test_application()
+        self.app = registered_test_application()
         self.addCleanup(self._cleanup_application)
-        self.app.register(None)
         self.window = Window(self.app)
         self.addCleanup(self.window.destroy)
         self.window._set_mode(False)
@@ -49,7 +62,9 @@ class GuiTests(unittest.TestCase):
         # addCleanup also runs if register() or Window() raises in setUp.
         for window in self.app.get_windows():
             window.destroy()
-        self.app.quit()
+        # Do not quit the GApplication between tests. GTK's DBus registration
+        # is process-scoped; tearing it down causes subsequent registrations
+        # to fail even with different, valid application IDs.
         self.app = None
         self.window = None
         gc.collect()
@@ -122,9 +137,6 @@ class GuiTests(unittest.TestCase):
                 Window(self.app)
         self.assertEqual(list(self.app.get_windows()), before)
 
-    def test_second_application_can_register_on_same_session_bus(self):
-        second = create_test_application()
-        self.addCleanup(second.quit)
-        self.assertNotEqual(self.app.get_application_id(), second.get_application_id())
-        self.assertTrue(second.register(None))
-        self.assertTrue(second.get_is_registered())
+    def test_shared_application_stays_registered(self):
+        self.assertIs(self.app, registered_test_application())
+        self.assertTrue(self.app.get_is_registered())

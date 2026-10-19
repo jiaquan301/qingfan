@@ -1,0 +1,27 @@
+name: Qingfan 1.0 checks
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+
+jobs:
+  ubuntu-gtk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GTK 3 and virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 librsvg2-common xvfb dbus-x11
+      - name: Compile and check shell scripts
+        run: |
+          /usr/bin/python3 -m compileall -q pomodoro tests
+          sh -n install.sh run.sh uninstall.sh verify.sh
+      - name: Run all regression tests with graphical GTK
+        env:
+          GSETTINGS_BACKEND: memory
+          QINGFAN_REQUIRE_GUI: "1"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: dbus-run-session -- xvfb-run -a ./verify.sh

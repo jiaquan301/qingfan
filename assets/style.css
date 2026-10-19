@@ -1,4 +1,4 @@
-/* 青番 2.0 · visual system; GTK 3 only, no third-party themes. */
+/* 青番 1.0 · quiet focus-first visual system, native GTK 3. */
 window.qingfan-window, window.qingfan-window > decoration { background: #f7f8f5; }
 window.qingfan-window { color: #25382e; }
 .qingfan-window headerbar {
@@ -54,7 +54,7 @@ window.qingfan-window { color: #25382e; }
   padding: 0 12px; box-shadow: none; font-size: 13px;
 }
 .qingfan-window entry.new-task:focus { border-color: #80ac91; box-shadow: 0 0 0 1px #80ac91; }
-.qingfan-window .task-row { background: transparent; border-radius: 10px; min-height: 44px; padding: 0 5px; }
+.qingfan-window .task-row { background: transparent; border-radius: 9px; min-height: 40px; padding: 0 4px; }
 .qingfan-window .task-row:hover { background: #ecf1eb; }
 .qingfan-window .task-row.is-current { background: #e5efe6; }
 .qingfan-window .task-row .task-pick {
@@ -63,7 +63,11 @@ window.qingfan-window { color: #25382e; }
 }
 .qingfan-window .task-row .task-pick label { font-size: 13px; font-weight: 500; color: #344b3d; }
 .qingfan-window .task-row.is-current .task-pick label { color: #23543a; font-weight: 700; }
-.qingfan-window .task-row.is-done .task-pick label { color: #607266; text-decoration: line-through; }
+.qingfan-window .task-row .task-pick { min-width: 0; }
+.qingfan-window .task-row .task-pick label { min-width: 0; }
+.qingfan-window .task-pomodoros { color: #728579; font-size: 11px; min-width: 32px; }
+.qingfan-window .task-row.is-current .task-pomodoros { color: #315d46; }
+.qingfan-window .task-row button.drag-handle { color: #899b8c; }
 .qingfan-window checkbutton { padding: 2px; }
 .qingfan-window checkbutton check { border: 1px solid #b7c5ba; border-radius: 5px; background: #fff; box-shadow: none; }
 .qingfan-window checkbutton check:checked { background: #548269; border-color: #548269; color: white; }
@@ -77,3 +81,7 @@ window.qingfan-window { color: #25382e; }
 .qingfan-window.break-mode button.primary:hover { background: #385d76; }
 .qingfan-window .task-row entry { min-width: 0; padding: 4px; }
 .qingfan-window .task-row button.icon-button { min-width: 22px; min-height: 26px; padding: 3px; }
+
+/* Compact, legible hierarchy: one active task, no extra per-row start control. */
+.qingfan-window .task-row .task-pick:hover { background: transparent; }
+.qingfan-window .task-row .task-pick label { padding-left: 2px; }

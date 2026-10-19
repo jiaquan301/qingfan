@@ -85,7 +85,13 @@ class Model:
                 tid = uuid.uuid4().hex
                 repaired = True
             ids.add(tid)
-            tasks.append({'id': tid, 'title': task['title'].strip()[:120], 'done': bool(task.get('done', False))})
+            raw_count = task.get('pomodoros', 0)
+            if (not isinstance(raw_count, int) or isinstance(raw_count, bool)
+                    or not 0 <= raw_count <= 1000000000):
+                raw_count = 0
+                repaired = True
+            tasks.append({'id': tid, 'title': task['title'].strip()[:120],
+                          'done': bool(task.get('done', False)), 'pomodoros': raw_count})
         current_id = payload.get('current_id')
         if not isinstance(current_id, str) or current_id not in {t['id'] for t in tasks if not t['done']}:
             current_id = None
@@ -151,6 +157,12 @@ class Model:
         old_phase = self.phase
         self.deadline = None
         if old_phase == "focus":
+            # Credit exactly one fully completed focus interval to the selected
+            # task. A pause, reset or rest interval never earns a pomodoro.
+            for task in self.tasks:
+                if task['id'] == self.current_id:
+                    task['pomodoros'] = task.get('pomodoros', 0) + 1
+                    break
             self.completed_rounds += 1
             self.phase = "long" if self.completed_rounds % 4 == 0 else "short"
         else:
@@ -163,7 +175,7 @@ class Model:
         title = title.strip()
         if not title:
             return
-        self.tasks.append({"id": uuid.uuid4().hex, "title": title[:120], "done": False})
+        self.tasks.append({"id": uuid.uuid4().hex, "title": title[:120], "done": False, "pomodoros": 0})
 
     def rename(self, task_id: str, title: str):
         title = title.strip()
@@ -203,6 +215,21 @@ class Model:
         target = next(i for i, t in enumerate(self.tasks) if t['id'] == target_id)
         self.tasks.insert(target + int(after), source)
         return original != [t['id'] for t in self.tasks]
+
+    def select(self, task_id: str | None) -> bool:
+        """Select exactly one task. Switching abandons an unfinished focus.
+
+        Rest intervals remain untouched. Selection never starts the timer:
+        the main start/pause control is the only timer trigger.
+        """
+        if task_id is not None and not any(task['id'] == task_id for task in self.tasks):
+            return False
+        if self.current_id == task_id:
+            return False
+        if self.phase == 'focus':
+            self.reset()
+        self.current_id = task_id
+        return True
 
     def current_title(self):
         return next((task["title"] for task in self.tasks if task["id"] == self.current_id), "选择一个任务，开始专注")

@@ -1,4 +1,4 @@
-"""Qingfan 2.0 — compact, task-first GTK 3 desktop Pomodoro.
+"""Qingfan 1.0 — focused, task-first GTK 3 desktop Pomodoro.
 
 All business state is in core.Model and remains compatible with 1.x data.
 The GUI uses only the Python standard library and Ubuntu's Gtk/PyGObject.
@@ -51,7 +51,7 @@ def icon_button(name, tooltip, callback=None, css='icon-button'):
 class Window(Gtk.ApplicationWindow):
     WIDTH = 332
     COMPACT_HEIGHT = 310
-    TASK_ROW_HEIGHT = 46
+    TASK_ROW_HEIGHT = 42
 
     def __init__(self, application):
         # Register/show the window only after every widget has been built.
@@ -73,6 +73,7 @@ class Window(Gtk.ApplicationWindow):
         self.pinned = True
         self._editing = None
         self._deleted_task = None
+        self._undo_source = None
         self._settings_dialog = None
         self._last_clock_text = None
         self._last_phase = None
@@ -86,6 +87,10 @@ class Window(Gtk.ApplicationWindow):
         self.set_keep_above(True)
         self.connect('delete-event', self.on_close)
         self.connect('key-press-event', self.on_shortcut)
+        # Labels and blank panel space cannot normally take keyboard focus;
+        # background clicks must still finish an active inline editor.
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.connect('button-press-event', self.on_background_click)
         self._build()
         self._adjust_height()
         self.refresh_tasks()
@@ -224,9 +229,11 @@ class Window(Gtk.ApplicationWindow):
         if self.compact:
             height = self.COMPACT_HEIGHT
         else:
-            visible = min(6, len(self.model.tasks))
+            visible = min(4, len(self.model.tasks))
             # Add task panel header/input/spacing + task rows, cap content size.
             height = self.COMPACT_HEIGHT + 121 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
+            if self.undo_bar.get_visible():
+                height += 49
         self.resize(self.WIDTH, height)
 
     def _set_mode(self, compact):
@@ -238,6 +245,7 @@ class Window(Gtk.ApplicationWindow):
             self.list_button.set_tooltip_text('展开任务清单  Ctrl+L')
             self.list_button.get_style_context().remove_class('selected')
         else:
+            self.refresh_tasks()  # Recompute checkbox sensitivity after timer state changes.
             self.task_panel.show_all()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('收起任务清单  Ctrl+L')
@@ -276,7 +284,10 @@ class Window(Gtk.ApplicationWindow):
                 self._set_mode(False)
             self.entry.grab_focus()
             return
+        was_running = self.model.running()
         self.model.start_pause()
+        if not was_running and self.model.running() and self.model.phase == 'focus':
+            self._set_mode(True)  # Timer and one task are the entire focus UI.
         self._save()
         self.refresh_clock()
 
@@ -302,6 +313,7 @@ class Window(Gtk.ApplicationWindow):
         if transition:
             self._save()
             if transition == 'focus':
+                self.refresh_tasks()
                 self.get_application().notify_user('专注完成', '完成一个番茄钟。休息一下吧。')
             else:
                 self.get_application().notify_user('休息结束', '准备好后，开始下一轮专注。')
@@ -373,8 +385,7 @@ class Window(Gtk.ApplicationWindow):
         self._finish_edit()
         for child in self.rows_box.get_children():
             child.destroy()
-        pending = sum(not t.get('done') for t in self.model.tasks)
-        self.count_label.set_text(f'{pending} 项待办')
+        self.count_label.set_text(f'{len(self.model.tasks)} 项任务')
         if not self.model.tasks:
             empty = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
             empty.set_margin_top(12)
@@ -384,33 +395,37 @@ class Window(Gtk.ApplicationWindow):
             self.rows_box.pack_start(empty, False, False, 0)
         for item in self.model.tasks:
             self.rows_box.pack_start(self._task_widget(item), False, False, 0)
-        count = min(6, len(self.model.tasks))
+        count = min(4, len(self.model.tasks))
         self.scroller.set_size_request(-1, count * self.TASK_ROW_HEIGHT if count else 49)
         self.rows_box.show_all()
         self._adjust_height()
 
     def _task_widget(self, task):
         tid = task['id']
-        done = bool(task.get('done'))
         active = tid == self.model.current_id
-        row = style(Gtk.Box(spacing=5), 'task-row')
-        if done:
-            style(row, 'is-done')
+        row = style(Gtk.Box(spacing=4), 'task-row')
         if active:
             style(row, 'is-current')
+
+        # Radio semantics in a compact checkbox: exactly one selected task;
+        # checked does NOT mean deleted or completed.
         check = Gtk.CheckButton()
         check.set_valign(Gtk.Align.CENTER)
-        check.set_active(done)
-        check.set_tooltip_text('标记完成' if not done else '恢复为待办')
-        check.get_accessible().set_name('恢复为待办' if done else '标记完成')
-        check.connect('toggled', lambda widget: self.update_done(tid, widget.get_active()))
+        check.set_active(active)
+        check.set_tooltip_text('取消选中任务' if active else '选择此任务专注')
+        check.get_accessible().set_name('取消选中任务' if active else '选择此任务专注')
+        # Switching during an active interval silently discards work, so
+        # selection remains locked until the user pauses the timer.
+        check.set_sensitive(not (self.model.phase == 'focus' and self.model.running()))
+        check.connect('toggled', lambda widget: self.select_task(tid if widget.get_active() else None))
         row.pack_start(check, False, False, 0)
-        # A dedicated handle keeps dragging separate from editing and completion.
+
+        targets = [Gtk.TargetEntry.new('UTF8_STRING', Gtk.TargetFlags.SAME_APP, 0)]
         handle = icon_button('list-drag-handle-symbolic', '拖动排序；Alt+↑ / Alt+↓ 调整顺序')
+        style(handle, 'drag-handle')
         handle._qingfan_task_id = tid
-        targets = [Gtk.TargetEntry.new('application/x-qingfan-task', Gtk.TargetFlags.SAME_APP, 0)]
         handle.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, targets, Gdk.DragAction.MOVE)
-        handle.connect('drag-data-get', lambda _w, _c, data, _info, _time: data.set_text(tid, -1))
+        handle.connect('drag-data-get', self._drag_task, tid)
         handle.connect('key-press-event', self._reorder_key, tid)
         row.pack_start(handle, False, False, 0)
         row.drag_dest_set(Gtk.DestDefaults.ALL, targets, Gdk.DragAction.MOVE)
@@ -421,16 +436,18 @@ class Window(Gtk.ApplicationWindow):
         stack.set_hexpand(True)
         pick = style(Gtk.Button(), 'task-pick')
         pick.set_relief(Gtk.ReliefStyle.NONE)
+        pick.set_hexpand(True)
         pick.set_tooltip_text(task['title'] + '\n点击编辑任务名称')
         text = label(task['title'], xalign=0)
+        text.set_hexpand(True)
         text.set_ellipsize(Pango.EllipsizeMode.END)
-        text.set_max_width_chars(18)
+        text.set_max_width_chars(16)
         pick.add(text)
         field = Gtk.Entry(text=task['title'])
         field.set_width_chars(1)
         field.set_max_length(120)
         field.get_accessible().set_name('任务名称')
-        field.set_tooltip_text('回车保存，Esc 取消；空名称不会覆盖原任务')
+        field.set_tooltip_text('回车或失焦保存，Esc 取消')
         stack.add_named(pick, 'title')
         stack.add_named(field, 'edit')
         pick.connect('clicked', lambda *_: self._begin_edit(tid, field, stack, text))
@@ -439,14 +456,14 @@ class Window(Gtk.ApplicationWindow):
         field.connect('key-press-event', self._edit_key)
         row.pack_start(stack, True, True, 0)
 
-        select = icon_button('media-playback-start-symbolic', '当前专注任务' if active else '选择此任务专注',
-                             lambda *_: self.select_task(tid))
-        select.set_sensitive(not done)
-        if active:
-            style(select, 'selected')
-        row.pack_start(select, False, False, 0)
+        count = label(f"{task.get('pomodoros', 0)} 次", 'task-pomodoros')
+        count.set_tooltip_text('这项任务累计完成的专注轮数')
+        row.pack_start(count, False, False, 0)
         row.pack_end(icon_button('edit-delete-symbolic', '删除任务，可撤销',
                                 lambda *_: self.remove_task(tid)), False, False, 0)
+        # Gtk.Button owns its own GDK event window; accept drop on its surface.
+        pick.drag_dest_set(Gtk.DestDefaults.ALL, targets, Gdk.DragAction.MOVE)
+        pick.connect('drag-data-received', self._drop_task, tid)
         return row
 
     def _begin_edit(self, tid, field, stack, text):
@@ -492,39 +509,35 @@ class Window(Gtk.ApplicationWindow):
             return True
         return False
 
-    def _drop_task(self, row, context, _x, y, data, _info, timestamp, target_id):
+    def _drag_task(self, _handle, _context, data, _info, _time, task_id):
+        data.set_text(task_id, -1)
+
+    def _drop_task(self, widget, context, _x, y, data, _info, timestamp, target_id):
         source = Gtk.drag_get_source_widget(context)
         source_id = getattr(source, '_qingfan_task_id', None)
         if source_id is None or data.get_text() != source_id:
             Gtk.drag_finish(context, False, False, timestamp)
             return
-        changed = self.model.reorder(source_id, target_id, after=y >= row.get_allocated_height() / 2)
-        # Finish the native drag before destroying its source widget.
+        changed = self.model.reorder(source_id, target_id,
+                                     after=y >= widget.get_allocated_height() / 2)
         Gtk.drag_finish(context, True, False, timestamp)
         if changed:
             self._save()
+            # GTK drag must finish before destroying its source widget.
             GLib.idle_add(self._refresh_after_drop)
 
     def _refresh_after_drop(self):
         self.refresh_tasks()
         return False
 
-    def update_done(self, tid, done):
-        if done and tid == self.model.current_id and self.model.running():
-            self.model.start_pause()  # do not silently keep working on a finished task
-        self.model.complete(tid, done)
-        self._save()
-        self.refresh_tasks()
-        self.refresh_clock()
-
     def select_task(self, tid):
-        task = next((t for t in self.model.tasks if t['id'] == tid), None)
-        if task is None or task.get('done'):
-            return
-        self.model.current_id = tid
-        self._save()
-        self.refresh_tasks()
-        self.refresh_clock()
+        if self.model.phase == 'focus' and self.model.running():
+            return  # Selection controls are also insensitive while running.
+        if self.model.select(tid):
+            self._finish_edit()
+            self._save()
+            self.refresh_tasks()
+            self.refresh_clock()
 
     def remove_task(self, tid):
         self._finish_edit()
@@ -540,17 +553,33 @@ class Window(Gtk.ApplicationWindow):
         self.refresh_clock()
         self.undo_bar.set_no_show_all(False)
         self.undo_bar.show_all()
+        self._adjust_height()
+        if self._undo_source is not None:
+            GLib.source_remove(self._undo_source)
+        self._undo_source = GLib.timeout_add_seconds(7, self._dismiss_undo)
+
+    def _dismiss_undo(self):
+        self._undo_source = None
+        self._deleted_task = None
+        self.undo_bar.hide()
+        self.undo_bar.set_no_show_all(True)
+        self._adjust_height()
+        return False
 
     def undo_delete(self, *_):
         if self._deleted_task is None:
             return
         task, index, was_current = self._deleted_task
         self._deleted_task = None
+        if self._undo_source is not None:
+            GLib.source_remove(self._undo_source)
+            self._undo_source = None
         self.model.tasks.insert(min(index, len(self.model.tasks)), task)
         if was_current and self.model.current_id is None and not task.get('done'):
             self.model.current_id = task['id']
         self.undo_bar.hide()
         self.undo_bar.set_no_show_all(True)
+        self._adjust_height()
         self._save()
         self.refresh_tasks()
         self.refresh_clock()
@@ -593,6 +622,17 @@ class Window(Gtk.ApplicationWindow):
         dialog.destroy()
         self._settings_dialog = None
 
+    def on_background_click(self, _widget, event):
+        source = Gtk.get_event_widget(event)
+        while source is not None:
+            if isinstance(source, (Gtk.Entry, Gtk.SpinButton)):
+                return False
+            source = source.get_parent()
+        if self._editing is not None:
+            self._finish_edit()
+            self.set_focus(None)
+        return False  # Preserve the original click on its actual control.
+
     def on_shortcut(self, _widget, event):
         if event.keyval == Gdk.KEY_Escape and self._editing is not None:
             self._finish_edit(cancel=True)
@@ -623,6 +663,9 @@ class Window(Gtk.ApplicationWindow):
         return False
 
     def on_destroy(self, *_):
+        if self._undo_source is not None:
+            GLib.source_remove(self._undo_source)
+            self._undo_source = None
         if self._clock_source is not None:
             GLib.source_remove(self._clock_source)
             self._clock_source = None
