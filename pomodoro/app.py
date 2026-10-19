@@ -88,6 +88,7 @@ class Window(Gtk.ApplicationWindow):
         self._deleted_task = None
         self._undo_source = None
         self._status_source = None
+        self._scroll_source = None
         self._settings_dialog = None
         self._last_clock_text = None
         self._last_phase = None
@@ -611,13 +612,22 @@ class Window(Gtk.ApplicationWindow):
         finally:
             self._refreshing_tasks = False
         if not self.compact:
-            GLib.idle_add(self._scroll_current_into_view)
+            if self._scroll_source is not None:
+                GLib.source_remove(self._scroll_source)
+            self._scroll_source = GLib.idle_add(self._scroll_current_into_view)
 
     def _scroll_current_into_view(self):
+        self._scroll_source = None
+        # Refreshes can queue while the window is being hidden or destroyed.
+        # Never query a GTK adjustment before the scroller is mapped.
+        if self.compact or not self.get_mapped() or not self.scroller.get_mapped():
+            return False
         row = self._task_row_by_id.get(self.model.current_id)
         if row is None or row.get_parent() != self.rows_box:
             return False
-        adjustment = self.scroller.get_vadjustment()
+        adjustment = self.scroller.get_property('vadjustment')
+        if adjustment is None:
+            return False
         allocation = row.get_allocation()
         value = adjustment.get_value()
         page = adjustment.get_page_size()
@@ -1109,6 +1119,9 @@ class Window(Gtk.ApplicationWindow):
         if self._status_source is not None:
             GLib.source_remove(self._status_source)
             self._status_source = None
+        if self._scroll_source is not None:
+            GLib.source_remove(self._scroll_source)
+            self._scroll_source = None
         if self._clock_source is not None:
             GLib.source_remove(self._clock_source)
             self._clock_source = None
