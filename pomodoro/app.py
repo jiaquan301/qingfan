@@ -129,6 +129,7 @@ class Window(Gtk.ApplicationWindow):
         base = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add(base)
         hero = style(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0), 'hero')
+        self.hero = hero
         hero.set_margin_start(22)
         hero.set_margin_end(22)
         hero.set_margin_top(19)
@@ -235,7 +236,7 @@ class Window(Gtk.ApplicationWindow):
         else:
             visible = min(4, len(self.model.tasks))
             # Add task panel header/input/spacing + task rows, cap content size.
-            height = self.COMPACT_HEIGHT + 121 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
+            height = 162 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
             if self.undo_bar.get_visible():
                 height += 49
         self.resize(self.WIDTH, height)
@@ -245,6 +246,7 @@ class Window(Gtk.ApplicationWindow):
         self.compact = compact
         if compact:
             self.task_panel.hide()
+            self.hero.show()
             if hasattr(self, 'orb_window'):
                 self.orb_window.set_keep_above(self.pinned)
                 self.orb_window.present()
@@ -256,6 +258,7 @@ class Window(Gtk.ApplicationWindow):
             if hasattr(self, 'orb_window'):
                 self.orb_window.hide()
             self.show()
+            self.hero.hide()
             self.refresh_tasks()  # Recompute checkbox sensitivity after timer state changes.
             self.task_panel.show_all()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
