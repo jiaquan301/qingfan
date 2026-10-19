@@ -55,11 +55,11 @@
 
 ## 安装 / 更新
 
-Ubuntu **22.04 / 24.04**，优先 GNOME 桌面。依赖系统 Python 3、GTK 3、PyGObject 和 SVG 图标支持，无 Python pip 或前端打包依赖：
+Ubuntu **22.04 / 24.04**，优先 GNOME 桌面。依赖系统 Python 3、GTK 3、PyGObject、Cairo 外部类型绑定和 SVG 图标支持，无 Python pip 或前端打包依赖：
 
 ```bash
 sudo apt update
-sudo apt install python3-gi gir1.2-gtk-3.0 librsvg2-common
+sudo apt install python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 librsvg2-common
 
 git clone https://github.com/jiaquan301/qingfan.git
 cd qingfan
