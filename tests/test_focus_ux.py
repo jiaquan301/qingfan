@@ -1,5 +1,6 @@
 """Focus-first model and GTK interaction regression tests (青番 1.0)."""
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -241,6 +242,12 @@ class FocusGuiTests(GuiTests):
                 self.assertEqual(len(self.window.rows_box.get_children()), count)
                 self.assertEqual(self.window.get_size(), initial_size)
                 if count >= 20:
+                    deadline = time.monotonic() + 1.0
                     adjustment = self.window.scroller.get_vadjustment()
+                    while (adjustment.get_upper() <= adjustment.get_page_size()
+                           and time.monotonic() < deadline):
+                        while Gtk.events_pending():
+                            Gtk.main_iteration_do(False)
+                        time.sleep(0.01)
                     self.assertGreater(adjustment.get_upper(), adjustment.get_page_size())
 
