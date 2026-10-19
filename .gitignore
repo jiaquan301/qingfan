@@ -1,0 +1,18 @@
+# Python runtime and test caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# OS and editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local user data must never be committed
+state.json
+state.json.tmp
+state.recovery-*.json
