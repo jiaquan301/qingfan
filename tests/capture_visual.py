@@ -5,6 +5,7 @@ Uses the actual widget surface, not a browser mock. Never runs as a unittest.
 import base64
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -25,7 +26,16 @@ def drain():
 
 
 def capture(window, name):
-    drain()
+    expected = {'focus': (326, 356), 'mini': (100, 100), 'tasks': (332, 232)}[name]
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        drain()
+        actual = window.get_size()
+        if actual == expected:
+            break
+        time.sleep(0.03)
+    if window.get_size() != expected:
+        raise RuntimeError(f'{name}: expected actual window {expected}, got {window.get_size()}')
     native = window.get_window()
     if native is None:
         raise RuntimeError(f'{name}: window did not realize')
