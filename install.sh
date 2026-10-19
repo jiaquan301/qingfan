@@ -2,9 +2,9 @@
 set -eu
 BASE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PYTHON=/usr/bin/python3
-if ! "$PYTHON" -c 'import gi; gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0"); from gi.repository import Gtk, GdkPixbuf' >/dev/null 2>&1; then
+if ! "$PYTHON" -c 'import gi, cairo; gi.require_version("Gtk", "3.0"); gi.require_version("Gdk", "3.0"); gi.require_version("PangoCairo", "1.0"); gi.require_foreign("cairo"); from gi.repository import Gtk, GdkPixbuf, PangoCairo' >/dev/null 2>&1; then
   printf '%s\n' '缺少 Ubuntu GTK 3 运行环境。请先执行：' \
-    'sudo apt update && sudo apt install python3-gi gir1.2-gtk-3.0 librsvg2-common' >&2
+    'sudo apt update && sudo apt install python3-gi python3-cairo python3-gi-cairo gir1.2-gtk-3.0 librsvg2-common' >&2
   exit 1
 fi
 APP_DIR="$HOME/.local/share/qingfan-app"
@@ -38,5 +38,5 @@ PYDESKTOP
 chmod 644 "$DESKTOP_DIR/app.qingfan.Pomodoro.desktop"
 # Clean up obsolete launcher names created during prototyping.
 rm -f -- "$HOME/.local/share/applications/qingfan.desktop"
-printf '\n%s\n' '青番 1.0 已安装。可从应用菜单搜索「青番」启动。' \
+printf '\n%s\n' '青番悬浮专注钟已安装。可从应用菜单搜索「青番」启动。' \
   '任务数据保存在 ~/.local/share/qingfan/state.json。'
