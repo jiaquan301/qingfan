@@ -166,6 +166,7 @@ class FocusOrb(Gtk.ApplicationWindow):
             cr.arc(0, 0, radius, 0, 2 * math.pi)
             cr.fill()
             ring_radius = radius - 6
+            ring_y = 0
             thickness = 4.5
         else:
             # The slightly tall ellipse references a tomato without illustration.
@@ -176,16 +177,17 @@ class FocusOrb(Gtk.ApplicationWindow):
                    0, 2 * math.pi)
             cr.fill()
             cr.restore()
-            ring_radius = min(width, height) * 0.355
+            ring_radius = 105
+            ring_y = -40
             thickness = 5.5
         cr.set_line_width(thickness)
         cr.set_source_rgba(0.68, 0.79, 0.73, 0.32)
-        cr.arc(0, 0, ring_radius, 0, 2 * math.pi)
+        cr.arc(0, ring_y, ring_radius, 0, 2 * math.pi)
         cr.stroke()
         fraction = 1 - self.host.model.seconds() / max(1, self.host.model.phase_duration)
         fraction = min(1, max(0, fraction))
         cr.set_source_rgba(*(0.27, 0.49, 0.55, 1) if is_break else (0.20, 0.43, 0.32, 1))
-        cr.arc(0, 0, ring_radius, -math.pi / 2, -math.pi / 2 + 2 * math.pi * fraction)
+        cr.arc(0, ring_y, ring_radius, -math.pi / 2, -math.pi / 2 + 2 * math.pi * fraction)
         cr.stroke()
 
         remaining = math.ceil(self.host.model.seconds())
