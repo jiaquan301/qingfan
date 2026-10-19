@@ -94,6 +94,17 @@ def main():
     w.orb_window.open_tasks()
     drain()
     capture(w, 'tasks')
+
+    # Keep a real 50-task fixture in visual evidence: the manager must remain
+    # the same size and expose a working internal scrollbar.
+    for index in range(49):
+        w.model.add(f'长清单任务 {index + 2:02d}')
+    w.refresh_tasks()
+    drain()
+    adjustment = w.scroller.get_vadjustment()
+    if adjustment.get_upper() <= adjustment.get_page_size():
+        raise RuntimeError('50-task list did not activate its internal scrollbar')
+    capture(w, 'long_tasks')
     w.destroy()
 
 
