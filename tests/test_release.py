@@ -134,3 +134,40 @@ class ReleaseTests(unittest.TestCase):
             loaded = Model.load(path)
             self.assertEqual(loaded.phase_duration, 300)
             self.assertEqual(loaded.seconds(), 200)
+
+
+    def test_completed_tasks_group_after_pending_and_restore_to_pending_end(self):
+        model = Model()
+        for title in ('A', 'B', 'C', 'D'):
+            model.add(title)
+        a, b, c, d = [task['id'] for task in model.tasks]
+        self.assertTrue(model.complete(b, True))
+        self.assertEqual([task['id'] for task in model.pending_tasks], [a, c, d])
+        self.assertEqual([task['id'] for task in model.completed_tasks], [b])
+        self.assertTrue(model.complete(b, False))
+        self.assertEqual([task['id'] for task in model.pending_tasks], [a, c, d, b])
+        self.assertFalse(model.completed_tasks)
+
+    def test_reorder_is_limited_to_the_same_status_group(self):
+        model = Model()
+        for title in ('A', 'B', 'C'):
+            model.add(title)
+        a, b, c = [task['id'] for task in model.tasks]
+        model.complete(b, True)
+        self.assertFalse(model.reorder(a, b))
+        self.assertTrue(model.reorder(c, a, after=True))
+        self.assertEqual([task['id'] for task in model.pending_tasks], [a, c])
+        self.assertEqual([task['id'] for task in model.completed_tasks], [b])
+
+    def test_running_focus_cannot_be_switched_by_model_api(self):
+        model = Model()
+        model.add('A')
+        model.add('B')
+        a, b = [task['id'] for task in model.tasks]
+        model.current_id = a
+        model.start_pause(now=100)
+        deadline = model.deadline
+        self.assertFalse(model.select(b))
+        self.assertEqual(model.current_id, a)
+        self.assertEqual(model.deadline, deadline)
+        self.assertTrue(model.running())
