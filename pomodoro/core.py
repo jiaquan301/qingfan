@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_SETTINGS = {"focus": 25, "short": 5, "long": 15}
+DEFAULT_DISPLAY = {"opacity": 0.90, "pinned": True}
 
 
 def data_path() -> Path:
@@ -25,6 +26,7 @@ class Model:
     remaining: float = 25 * 60
     deadline: float | None = None
     settings: dict = field(default_factory=lambda: DEFAULT_SETTINGS.copy())
+    display: dict = field(default_factory=lambda: DEFAULT_DISPLAY.copy())
     phase_duration: float = 25 * 60
     _needs_backup: bool = field(default=False, repr=False)
 
@@ -67,6 +69,17 @@ class Model:
             repaired = True
         settings = {key: number(raw_settings.get(key, value), value, 1, 180, integer=True)
                     for key, value in DEFAULT_SETTINGS.items()}
+        raw_display = payload.get('display', {})
+        if not isinstance(raw_display, dict):
+            raw_display = {}
+            repaired = True
+        opacity = number(raw_display.get('opacity', 0.90), 0.90, 0.70, 1.00)
+        # Keep a boolean as a boolean, never coerce strings to truthy.
+        pinned = raw_display.get('pinned', True)
+        if not isinstance(pinned, bool):
+            pinned = True
+            repaired = True
+        display = {"opacity": opacity, "pinned": pinned}
         phase = payload.get('phase', 'focus')
         if not isinstance(phase, str) or phase not in DEFAULT_SETTINGS:
             phase = 'focus'
@@ -98,7 +111,7 @@ class Model:
         return cls(tasks=tasks, current_id=current_id, phase=phase,
                    completed_rounds=number(payload.get('completed_rounds', 0), 0, 0, 1000000000, integer=True),
                    remaining=number(payload.get('remaining', settings[phase] * 60), settings[phase] * 60, 0, 180 * 60),
-                   settings=settings,
+                   settings=settings, display=display,
                    phase_duration=number(payload.get('phase_duration', settings[phase] * 60), settings[phase] * 60, 60, 180 * 60),
                    _needs_backup=repaired)
 
@@ -107,7 +120,8 @@ class Model:
         path.parent.mkdir(parents=True, exist_ok=True)
         value = {"tasks": self.tasks, "current_id": self.current_id, "phase": self.phase,
                  "completed_rounds": self.completed_rounds, "remaining": self.seconds(),
-                 "settings": self.settings, "phase_duration": self.phase_duration}
+                 "settings": self.settings, "display": self.display,
+                 "phase_duration": self.phase_duration}
         if self._needs_backup and path.exists():
             backup = path.with_name(f'state.recovery-{time.time_ns()}.json')
             shutil.copy2(path, backup)
@@ -118,6 +132,10 @@ class Model:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp, path)
+
+    def set_opacity(self, value: float):
+        """Visible-body opacity. The time lettering and progress arc stay opaque."""
+        self.display["opacity"] = max(0.70, min(1.00, float(value)))
 
     def seconds(self, now: float | None = None) -> float:
         if self.deadline is None:
