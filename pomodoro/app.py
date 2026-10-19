@@ -94,6 +94,8 @@ class Window(Gtk.ApplicationWindow):
         self._last_phase = None
         self._last_task_title = None
         self._last_running = None
+        self._last_task_primary = None
+        self._last_task_primary_enabled = None
 
         self.set_default_size(self.WIDTH, self.COMPACT_HEIGHT)
         self.set_size_request(306, -1)
@@ -246,7 +248,7 @@ class Window(Gtk.ApplicationWindow):
         self.scroller.set_shadow_type(Gtk.ShadowType.NONE)
         self.scroller.set_hexpand(True)
         self.scroller.set_vexpand(True)
-        self.scroller.set_size_request(-1, 140)
+        self.scroller.set_size_request(-1, 100)
         inside.pack_start(self.scroller, True, True, 0)
 
         self.list_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -762,8 +764,12 @@ class Window(Gtk.ApplicationWindow):
         else:
             action = '继续休息' if self.model.seconds() < self.model.phase_duration else '开始休息'
             enabled = True
-        self.task_primary_button.set_label(action)
-        self.task_primary_button.set_sensitive(enabled)
+        if action != self._last_task_primary:
+            self.task_primary_button.set_label(action)
+            self._last_task_primary = action
+        if enabled != self._last_task_primary_enabled:
+            self.task_primary_button.set_sensitive(enabled)
+            self._last_task_primary_enabled = enabled
 
     def task_primary_action(self, *_):
         if self.model.running():
