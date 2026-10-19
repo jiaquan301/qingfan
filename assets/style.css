@@ -83,7 +83,5 @@ window.qingfan-window { color: #25382e; }
 .qingfan-window .task-row button.icon-button { min-width: 22px; min-height: 26px; padding: 3px; }
 
 /* Compact, legible hierarchy: one active task, no extra per-row start control. */
-.qingfan-window .task-row:focus-within { background: #edf2ec; }
-.qingfan-window .task-row.is-current:focus-within { background: #e2eee4; }
 .qingfan-window .task-row .task-pick:hover { background: transparent; }
 .qingfan-window .task-row .task-pick label { padding-left: 2px; }
