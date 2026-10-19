@@ -155,8 +155,8 @@ class ReleaseTests(unittest.TestCase):
         a, b, c = [task['id'] for task in model.tasks]
         model.complete(b, True)
         self.assertFalse(model.reorder(a, b))
-        self.assertTrue(model.reorder(c, a, after=True))
-        self.assertEqual([task['id'] for task in model.pending_tasks], [a, c])
+        self.assertTrue(model.reorder(c, a, after=False))
+        self.assertEqual([task['id'] for task in model.pending_tasks], [c, a])
         self.assertEqual([task['id'] for task in model.completed_tasks], [b])
 
     def test_running_focus_cannot_be_switched_by_model_api(self):
