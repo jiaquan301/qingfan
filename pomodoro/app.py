@@ -236,9 +236,10 @@ class Window(Gtk.ApplicationWindow):
         else:
             visible = min(4, len(self.model.tasks))
             # Add task panel header/input/spacing + task rows, cap content size.
-            height = 162 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
+            height = 190 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
             if self.undo_bar.get_visible():
                 height += 49
+        self.set_default_size(self.WIDTH, height)
         self.resize(self.WIDTH, height)
 
     def _set_mode(self, compact):
@@ -257,9 +258,12 @@ class Window(Gtk.ApplicationWindow):
         else:
             if hasattr(self, 'orb_window'):
                 self.orb_window.hide()
-            self.show()
+            was_mapped = self.get_mapped()
+            if was_mapped:
+                self.hide()
             self.hero.hide()
-            self.refresh_tasks()  # Recompute checkbox sensitivity after timer state changes.
+            self.refresh_tasks()
+            self.show()  # Recompute checkbox sensitivity after timer state changes.
             self.task_panel.show_all()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('收起任务清单  Ctrl+L')
