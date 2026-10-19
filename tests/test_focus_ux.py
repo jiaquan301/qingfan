@@ -224,15 +224,21 @@ class FocusGuiTests(GuiTests):
         self.assertEqual(self.window.model.seconds(), 1400)
         self.assertFalse(self.window.model.running())
 
-    def test_long_task_list_scrolls_without_growing_window(self):
-        for index in range(50):
-            self.window.model.add(f'长清单任务 {index:02d}')
-        self.window.refresh_tasks()
-        while Gtk.events_pending():
-            Gtk.main_iteration_do(False)
-        size = self.window.get_size()
-        self.assertEqual(len(self.window.rows_box.get_children()), 53)
-        adjustment = self.window.scroller.get_vadjustment()
-        self.assertGreater(adjustment.get_upper(), adjustment.get_page_size())
-        self.assertEqual(self.window.get_size(), size)
+    def test_five_twenty_and_fifty_tasks_keep_window_fixed_and_scroll(self):
+        initial_size = self.window.get_size()
+        for count in (5, 20, 50):
+            with self.subTest(task_count=count):
+                self.window.model.tasks = []
+                self.window.model.current_id = None
+                for index in range(count):
+                    self.window.model.add(f'长清单任务 {index:02d}')
+                self.window.model.current_id = self.window.model.pending_tasks[0]['id']
+                self.window.refresh_tasks()
+                while Gtk.events_pending():
+                    Gtk.main_iteration_do(False)
+                self.assertEqual(len(self.window.rows_box.get_children()), count)
+                self.assertEqual(self.window.get_size(), initial_size)
+                if count >= 20:
+                    adjustment = self.window.scroller.get_vadjustment()
+                    self.assertGreater(adjustment.get_upper(), adjustment.get_page_size())
 
