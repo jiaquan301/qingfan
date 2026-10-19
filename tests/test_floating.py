@@ -87,10 +87,18 @@ class FloatingOrbGuiTests(unittest.TestCase):
         self.window._set_mode(True)
         self.assertEqual(orb.canvas.get_size_request(), (326, 356))
         orb.set_mini(True)
+        for _ in range(30):
+            if Gtk.events_pending():
+                Gtk.main_iteration_do(False)
         self.assertEqual(orb.canvas.get_size_request(), (100, 100))
+        self.assertEqual(orb.get_size(), (100, 100), 'GTK toplevel must actually shrink')
         self.assertFalse(orb.controls.get_visible())
         orb.set_mini(False)
+        for _ in range(30):
+            if Gtk.events_pending():
+                Gtk.main_iteration_do(False)
         self.assertEqual(orb.canvas.get_size_request(), (326, 356))
+        self.assertEqual(orb.get_size(), (326, 356))
         self.assertTrue(orb.controls.get_visible())
 
     def test_mini_open_tasks_restores_manager(self):
