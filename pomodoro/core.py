@@ -231,9 +231,16 @@ class Model:
         task = next((item for item in self.tasks if item['id'] == task_id), None)
         if task is None or task['done'] == bool(done):
             return False
-        task['done'] = bool(done)
-        if task['done'] and self.current_id == task_id:
-            self.current_id = None
+        if done:
+            # The most recently completed task goes to the end of the completed
+            # section; restoring a task appends it to the end of pending work.
+            self.tasks.remove(task)
+            task['done'] = True
+            self.tasks.append(task)
+            if self.current_id == task_id:
+                self.current_id = None
+        else:
+            task['done'] = False
         self._normalize_task_groups()
         return True
 
