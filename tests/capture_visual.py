@@ -58,10 +58,11 @@ def capture(window, name):
             for yy in range(0, height, 8):
                 for xx in range(0, width, 8):
                     pos = yy * stride + xx * channels
-                    # RGBA on compositing desktops, RGB in 24-bit Xvfb.
-                    visible = (pixels[pos + 3] > 32 if channels == 4
-                               else max(pixels[pos:pos + 3]) > 32)
-                    visible_samples += bool(visible)
+                    # Reject a mapped-but-not-painted black frame. Xvfb can
+                    # expose a new toplevel before its Cairo draw callback.
+                    has_alpha = channels != 4 or pixels[pos + 3] > 32
+                    has_color = max(pixels[pos:pos + 3]) > 60
+                    visible_samples += bool(has_alpha and has_color)
             if visible_samples >= 15:
                 break
         time.sleep(0.04)
