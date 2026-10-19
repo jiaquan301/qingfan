@@ -16,6 +16,7 @@ gi.require_version('Gdk', '3.0')
 from gi.repository import Gdk, GdkPixbuf, Gio, GLib, Gtk, Pango
 
 from .core import Model
+from .floating import FocusOrb
 
 ROOT = Path(__file__).resolve().parent.parent
 ASSETS = ROOT / 'assets'
@@ -62,6 +63,8 @@ class Window(Gtk.ApplicationWindow):
             self.set_application(application)
             self.show_all()
             self.task_panel.hide()
+            self.orb_window = FocusOrb(application, self)
+            self._set_mode(True)
         except Exception:
             self.destroy()
             raise
@@ -70,7 +73,7 @@ class Window(Gtk.ApplicationWindow):
         style(self, 'qingfan-window')
         self.model = Model.load()
         self.compact = True
-        self.pinned = True
+        self.pinned = self.model.display["pinned"]
         self._editing = None
         self._deleted_task = None
         self._undo_source = None
@@ -84,7 +87,7 @@ class Window(Gtk.ApplicationWindow):
         self.set_size_request(306, -1)
         self.set_resizable(False)
         self.set_gravity(Gdk.Gravity.NORTH_WEST)
-        self.set_keep_above(True)
+        self.set_keep_above(self.pinned)
         self.connect('delete-event', self.on_close)
         self.connect('key-press-event', self.on_shortcut)
         # Labels and blank panel space cannot normally take keyboard focus;
@@ -117,7 +120,8 @@ class Window(Gtk.ApplicationWindow):
         self.list_button = icon_button('view-list-symbolic', '展开任务清单  Ctrl+L', self.toggle_mode)
         header.pack_end(self.list_button)
         self.pin_button = icon_button('view-pin-symbolic', '取消置顶', self.toggle_pin)
-        style(self.pin_button, 'selected')
+        if self.pinned:
+            style(self.pin_button, 'selected')
         header.pack_end(self.pin_button)
         header.pack_start(icon_button('preferences-system-symbolic', '计时设置', self.open_settings))
         self.set_titlebar(header)
@@ -125,6 +129,7 @@ class Window(Gtk.ApplicationWindow):
         base = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.add(base)
         hero = style(Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0), 'hero')
+        self.hero = hero
         hero.set_margin_start(22)
         hero.set_margin_end(22)
         hero.set_margin_top(19)
@@ -231,21 +236,40 @@ class Window(Gtk.ApplicationWindow):
         else:
             visible = min(4, len(self.model.tasks))
             # Add task panel header/input/spacing + task rows, cap content size.
-            height = self.COMPACT_HEIGHT + 121 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
+            height = 260 + (visible * self.TASK_ROW_HEIGHT if visible else 0)
             if self.undo_bar.get_visible():
                 height += 49
-        self.resize(self.WIDTH, height)
+        # A size hint alone may be ignored when the hidden manager is
+        # re-mapped. Set an actual content minimum for the compact drawer.
+        # Header-bar and client-side shadow consume additional outer pixels.
+        # Allocate enough total geometry for the list's full client area.
+        width = self.WIDTH + 10 if not self.compact else self.WIDTH
+        self.set_size_request(width, height) if not self.compact else self.set_size_request(306, -1)
+        self.set_default_size(width, height)
+        self.resize(width, height)
 
     def _set_mode(self, compact):
         self._finish_edit()
         self.compact = compact
         if compact:
             self.task_panel.hide()
+            self.hero.show()
+            if hasattr(self, 'orb_window'):
+                self.orb_window.set_keep_above(self.pinned)
+                self.orb_window.present()
+                self.hide()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-list-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('展开任务清单  Ctrl+L')
             self.list_button.get_style_context().remove_class('selected')
         else:
-            self.refresh_tasks()  # Recompute checkbox sensitivity after timer state changes.
+            if hasattr(self, 'orb_window'):
+                self.orb_window.hide()
+            was_mapped = self.get_mapped()
+            if was_mapped:
+                self.hide()
+            self.hero.hide()
+            self.refresh_tasks()
+            self.show()  # Recompute checkbox sensitivity after timer state changes.
             self.task_panel.show_all()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('收起任务清单  Ctrl+L')
@@ -257,7 +281,11 @@ class Window(Gtk.ApplicationWindow):
 
     def toggle_pin(self, *_):
         self.pinned = not self.pinned
+        self.model.display['pinned'] = self.pinned
         self.set_keep_above(self.pinned)
+        if hasattr(self, 'orb_window'):
+            self.orb_window.set_keep_above(self.pinned)
+        self._save()
         context = self.pin_button.get_style_context()
         if self.pinned:
             context.add_class('selected')
@@ -365,6 +393,8 @@ class Window(Gtk.ApplicationWindow):
         if action != self._last_running:
             self.go_btn.set_label(action)
             self._last_running = action
+        if hasattr(self, 'orb_window'):
+            self.orb_window.update(action)
         return True
 
     def add_task(self, *_):
@@ -589,7 +619,8 @@ class Window(Gtk.ApplicationWindow):
         if self._settings_dialog is not None:
             self._settings_dialog.present()
             return
-        dialog = Gtk.Dialog(title='番茄钟设置', transient_for=self, flags=Gtk.DialogFlags.MODAL)
+        parent = self.orb_window if hasattr(self, 'orb_window') and self.orb_window.get_visible() else self
+        dialog = Gtk.Dialog(title='专注与显示设置', transient_for=parent, flags=Gtk.DialogFlags.MODAL)
         self._settings_dialog = dialog
         dialog.add_button('取消', Gtk.ResponseType.CANCEL)
         dialog.add_button('保存', Gtk.ResponseType.OK)
@@ -608,17 +639,38 @@ class Window(Gtk.ApplicationWindow):
             fields[key] = spin
             grid.attach(spin, 1, index, 1, 1)
             grid.attach(label('分钟', 'support-text'), 2, index, 1, 1)
-        note = label('正在进行的计时不受影响；下次重置使用新时长。', 'support-text', xalign=0)
+        grid.attach(label('悬浮透明度', xalign=0), 0, 3, 1, 1)
+        alpha = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 70, 100, 5)
+        alpha.set_size_request(170, -1)
+        alpha.set_value(round(self.model.display.get('opacity', 0.9) * 100))
+        alpha.set_digits(0)
+        alpha.set_draw_value(True)
+        alpha.set_tooltip_text('仅改变悬浮体底色；计时文字和进度环保持不透明')
+        grid.attach(alpha, 1, 3, 2, 1)
+        original_opacity = self.model.display.get('opacity', 0.9)
+
+        def preview_opacity(widget):
+            self.model.set_opacity(widget.get_value() / 100)
+            if hasattr(self, 'orb_window'):
+                self.orb_window.update()
+
+        alpha.connect('value-changed', preview_opacity)
+        note = label('新时长在下一次重置后生效。透明度可实时预览。', 'support-text', xalign=0)
         note.set_line_wrap(True)
-        grid.attach(note, 0, 3, 3, 1)
+        grid.attach(note, 0, 4, 3, 1)
         dialog.get_content_area().add(grid)
         dialog.show_all()
         if dialog.run() == Gtk.ResponseType.OK:
             for item in fields.values():
                 item.update()
             self.model.update_settings({key: item.get_value_as_int() for key, item in fields.items()})
+            self.model.set_opacity(alpha.get_value() / 100)
             self._save()
             self.refresh_clock()
+        else:
+            self.model.set_opacity(original_opacity)
+            if hasattr(self, 'orb_window'):
+                self.orb_window.update()
         dialog.destroy()
         self._settings_dialog = None
 
@@ -663,6 +715,8 @@ class Window(Gtk.ApplicationWindow):
         return False
 
     def on_destroy(self, *_):
+        if hasattr(self, 'orb_window'):
+            self.orb_window.destroy()
         if self._undo_source is not None:
             GLib.source_remove(self._undo_source)
             self._undo_source = None

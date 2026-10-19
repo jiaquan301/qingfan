@@ -111,5 +111,5 @@ class RegressionTests(unittest.TestCase):
             m.add('计划')
             m.save(file)
             parsed = json.loads(file.read_text(encoding='utf-8'))
-            self.assertEqual(set(parsed), {'tasks', 'current_id', 'phase', 'completed_rounds', 'remaining', 'settings', 'phase_duration'})
+            self.assertEqual(set(parsed), {'tasks', 'current_id', 'phase', 'completed_rounds', 'remaining', 'settings', 'display', 'phase_duration'})
             self.assertFalse(file.with_name('state.json.tmp').exists())

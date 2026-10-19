@@ -85,3 +85,38 @@ window.qingfan-window { color: #25382e; }
 /* Compact, legible hierarchy: one active task, no extra per-row start control. */
 .qingfan-window .task-row .task-pick:hover { background: transparent; }
 .qingfan-window .task-row .task-pick label { padding-left: 2px; }
+
+/* The floating dial owns its alpha channel. Avoid opaque GTK theme fallback. */
+window.orb-window, window.orb-window > decoration,
+.orb-window, .orb-window overlay, .orb-window drawingarea {
+  background-color: transparent;
+  background-image: none;
+  border: 0;
+  box-shadow: none;
+}
+.orb-window button.orb-icon {
+  background: rgba(255,255,255,0.25);
+  background-image: none;
+  color: #315b48;
+  box-shadow: none;
+  border: none;
+  border-radius: 18px;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 3px;
+}
+.orb-window button.orb-icon:hover { background: rgba(223,236,226,0.90); }
+.orb-window button.orb-action {
+  background: #30674e;
+  background-image: none;
+  box-shadow: none;
+  border: 0;
+  border-radius: 20px;
+  min-height: 36px;
+  min-width: 112px;
+  padding: 1px 10px;
+}
+.orb-window button.orb-action label { color: #fff; font-size: 12px; font-weight: 600; }
+.orb-window button.orb-action:hover { background: #24563f; }
+.orb-window button.orb-reset { background: rgba(225,237,228,0.88); }
+.orb-window button:focus { outline-color: #62987a; outline-offset: 2px; }
