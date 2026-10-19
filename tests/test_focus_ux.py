@@ -225,6 +225,8 @@ class FocusGuiTests(GuiTests):
         self.assertFalse(self.window.model.running())
 
     def test_five_twenty_and_fifty_tasks_keep_window_fixed_and_scroll(self):
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
         initial_size = self.window.get_size()
         for count in (5, 20, 50):
             with self.subTest(task_count=count):
