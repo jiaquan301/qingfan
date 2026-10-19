@@ -120,3 +120,99 @@ window.orb-window, window.orb-window > decoration,
 .orb-window button.orb-action:hover { background: #24563f; }
 .orb-window button.orb-reset { background: rgba(225,237,228,0.88); }
 .orb-window button:focus { outline-color: #62987a; outline-offset: 2px; }
+
+
+/* Task workspace V1.1: one pending queue, a distinct completed section. */
+.qingfan-window .task-row {
+  min-height: 46px;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+.qingfan-window .task-row.is-current {
+  background: #e5efe6;
+  border-left: 3px solid #54856e;
+  padding-left: 3px;
+}
+.qingfan-window .task-row.task-completed {
+  background: transparent;
+}
+.qingfan-window .task-row.task-completed .task-title-text {
+  color: #7b887e;
+}
+.qingfan-window .task-row .task-pick {
+  border: 0;
+  border-radius: 7px;
+  padding: 0 5px;
+  min-height: 42px;
+}
+.qingfan-window .task-row .task-pick:hover {
+  background: #edf2ed;
+}
+.qingfan-window .task-row.is-current .task-pick:hover {
+  background: #dce9de;
+}
+.qingfan-window .task-row .task-pick label {
+  font-size: 13px;
+}
+.qingfan-window .task-row checkbutton {
+  min-width: 28px;
+  min-height: 32px;
+}
+.qingfan-window .task-row .task-pomodoros {
+  color: #607c69;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 3px;
+}
+.qingfan-window .task-row .task-menu-button {
+  min-width: 30px;
+  min-height: 34px;
+}
+.qingfan-window button.completed-toggle {
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 6px;
+  min-height: 34px;
+  color: #65776a;
+}
+.qingfan-window button.completed-toggle:hover {
+  background: #edf1eb;
+}
+.qingfan-window .completed-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64766a;
+}
+.qingfan-window .task-status {
+  font-size: 12px;
+  color: #8a663b;
+  padding: 2px 0;
+}
+.qingfan-window .footer-hint {
+  font-size: 11px;
+  color: #87958a;
+}
+.qingfan-window button.task-primary {
+  min-height: 44px;
+  min-width: 0;
+}
+.qingfan-window button.task-primary:disabled {
+  background: #dfe6df;
+  border-color: #dfe6df;
+  color: #758378;
+}
+.qingfan-window button.task-primary:disabled label {
+  color: #758378;
+}
+.qingfan-window entry.new-task {
+  min-height: 40px;
+}
+.qingfan-window entry:focus {
+  outline-color: #81ac93;
+}
+.qingfan-window .list-scroller scrollbar.vertical {
+  min-width: 8px;
+}
