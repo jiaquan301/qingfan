@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from gi.repository import Gdk, Gtk, Pango, PangoCairo
+from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo
 
 
 def draw_text(context, value, x, y, *, size, color, weight=Pango.Weight.NORMAL, width=260):
@@ -41,7 +41,9 @@ class FocusOrb(Gtk.ApplicationWindow):
         self.host = host
         self.get_style_context().add_class('orb-window')
         self.mini = False
-        self._last_button_event = None
+        self._press_at = None
+        self._click_source = None
+        self.connect('destroy', self._cancel_click)
         self.set_decorated(False)
         self.set_resizable(False)
         self.set_skip_taskbar_hint(True)
@@ -63,9 +65,13 @@ class FocusOrb(Gtk.ApplicationWindow):
         self.add(self.overlay)
         self.canvas = Gtk.DrawingArea()
         self.canvas.set_size_request(*self.FULL)
-        self.canvas.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.canvas.add_events(Gdk.EventMask.BUTTON_PRESS_MASK |
+                               Gdk.EventMask.BUTTON_RELEASE_MASK |
+                               Gdk.EventMask.POINTER_MOTION_MASK)
         self.canvas.connect('draw', self._draw)
         self.canvas.connect('button-press-event', self._on_canvas_press)
+        self.canvas.connect('button-release-event', self._on_canvas_release)
+        self.canvas.connect('motion-notify-event', self._on_canvas_motion)
         self.canvas.set_tooltip_text('拖动空白处移动；双击暂停或继续；右键更多操作')
         self.overlay.add(self.canvas)
 
@@ -200,6 +206,35 @@ class FocusOrb(Gtk.ApplicationWindow):
         cr.restore()
         return False
 
+    def _cancel_click(self, *_):
+        if self._click_source is not None:
+            GLib.source_remove(self._click_source)
+            self._click_source = None
+        self._press_at = None
+
+    def _single_click(self):
+        self._click_source = None
+        if self.mini:
+            self.set_mini(False)
+        return False
+
+    def _on_canvas_release(self, _widget, event):
+        if event.button == 1 and self._press_at is not None:
+            self._press_at = None
+            self._cancel_click()
+            self._click_source = GLib.timeout_add(230, self._single_click)
+            return True
+        return False
+
+    def _on_canvas_motion(self, _widget, event):
+        if self._press_at is not None:
+            x, y = self._press_at
+            if (event.x_root - x) ** 2 + (event.y_root - y) ** 2 > 64:
+                self._cancel_click()
+                self.begin_move_drag(1, int(event.x_root), int(event.y_root), event.time)
+                return True
+        return False
+
     def _popup_menu(self, event):
         menu = Gtk.Menu()
         def entry(title, callback):
@@ -210,6 +245,7 @@ class FocusOrb(Gtk.ApplicationWindow):
         entry('展开时钟' if self.mini else '缩小为迷你时钟', self.toggle_mini)
         entry('暂停' if self.host.model.running() else '开始 / 继续', self.host.toggle_timer)
         entry('计时与透明度设置', self.host.open_settings)
+        entry('取消置顶' if self.host.pinned else '保持置顶', self.host.toggle_pin)
         entry('退出青番', self.host.close)
         menu.show_all()
         menu.popup_at_pointer(event)
@@ -222,13 +258,14 @@ class FocusOrb(Gtk.ApplicationWindow):
             self.begin_move_drag(event.button, int(event.x_root), int(event.y_root), event.time)
             return True
         if event.button == 1 and event.type == Gdk.EventType._2BUTTON_PRESS:
+            self._cancel_click()
             self.host.toggle_timer()
             return True
         if event.button == 1:
-            if self.mini:
-                self.set_mini(False)
-            else:
-                self.begin_move_drag(event.button, int(event.x_root), int(event.y_root), event.time)
+            if self._click_source is not None:
+                GLib.source_remove(self._click_source)
+                self._click_source = None
+            self._press_at = (event.x_root, event.y_root)
             return True
         return False
 
