@@ -239,6 +239,9 @@ class Window(Gtk.ApplicationWindow):
             height = 190 + (visible * self.TASK_ROW_HEIGHT if visible else 49)
             if self.undo_bar.get_visible():
                 height += 49
+        # A size hint alone may be ignored when the hidden manager is
+        # re-mapped. Set an actual content minimum for the compact drawer.
+        self.set_size_request(self.WIDTH, height) if not self.compact else self.set_size_request(306, -1)
         self.set_default_size(self.WIDTH, height)
         self.resize(self.WIDTH, height)
 
