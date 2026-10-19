@@ -1,0 +1,79 @@
+/* 青番 2.0 · visual system; GTK 3 only, no third-party themes. */
+window.qingfan-window, window.qingfan-window > decoration { background: #f7f8f5; }
+window.qingfan-window { color: #25382e; }
+.qingfan-window headerbar {
+  background: #f7f8f5;
+  background-image: none;
+  border-bottom: 1px solid #e9ede7;
+  box-shadow: none;
+  min-height: 42px;
+  padding: 3px 10px;
+}
+.qingfan-window headerbar button.titlebutton { border-radius: 100%; }
+.qingfan-window label { color: #25382e; }
+.qingfan-window .brand-name { font-weight: 700; font-size: 14px; }
+.qingfan-window .hero { background: #f7f8f5; }
+.qingfan-window .eyebrow { color: #607266; font-size: 12px; font-weight: 600; }
+.qingfan-window .time { font-size: 64px; font-weight: 600; color: #264b3c; }
+.qingfan-window .task-title { color: #293e32; font-size: 14px; font-weight: 600; }
+.qingfan-window .support-text { color: #607266; font-size: 12px; }
+.qingfan-window .round-dot { color: #d7e0d9; font-size: 12px; }
+.qingfan-window .round-dot.filled { color: #54856e; }
+.qingfan-window .progress trough { min-height: 4px; border-radius: 20px; background: #e5eae4; border: none; box-shadow: none; }
+.qingfan-window .progress progress { min-height: 4px; border-radius: 20px; background: #5c8c74; border: none; box-shadow: none; }
+.qingfan-window button:focus { outline-color: #81ac93; outline-offset: 2px; }
+.qingfan-window button.icon-button {
+  background: transparent; background-image: none; border: none;
+  box-shadow: none; border-radius: 9px; padding: 5px; min-width: 25px; min-height: 25px;
+  color: #64776a;
+}
+.qingfan-window button.icon-button:hover { background: #e8eee8; color: #2f5542; }
+.qingfan-window button.icon-button:active { background: #dce7dd; }
+.qingfan-window button.icon-button.selected { background: #e4eee6; color: #315d46; }
+.qingfan-window button.primary {
+  background: #386b52; background-image: none; color: #ffffff;
+  border: 1px solid #386b52; border-radius: 12px;
+  font-size: 14px; font-weight: 600;
+  min-height: 40px; min-width: 164px;
+  padding: 1px 15px; box-shadow: none;
+}
+.qingfan-window button.primary label { color: #ffffff; }
+.qingfan-window button.primary:hover { background: #2e5b45; }
+.qingfan-window button.primary:active { background: #244b38; }
+.qingfan-window button.secondary {
+  background: #edf1eb; background-image: none; border: 1px solid #e5ebe3;
+  box-shadow: none; border-radius: 12px; min-width: 40px; min-height: 40px;
+  color: #526b5b; padding: 0;
+}
+.qingfan-window button.secondary:hover { background: #e0e9df; }
+.qingfan-window .section-title { font-weight: 700; font-size: 13px; color: #304a3b; }
+.qingfan-window .task-count { color: #607266; font-size: 12px; }
+.qingfan-window entry.new-task {
+  background: #fff; color: #273d32; border: 1px solid #e0e7df;
+  border-radius: 10px; min-height: 36px;
+  padding: 0 12px; box-shadow: none; font-size: 13px;
+}
+.qingfan-window entry.new-task:focus { border-color: #80ac91; box-shadow: 0 0 0 1px #80ac91; }
+.qingfan-window .task-row { background: transparent; border-radius: 10px; min-height: 44px; padding: 0 5px; }
+.qingfan-window .task-row:hover { background: #ecf1eb; }
+.qingfan-window .task-row.is-current { background: #e5efe6; }
+.qingfan-window .task-row .task-pick {
+  background: transparent; background-image: none; box-shadow: none; border: none;
+  padding: 0; min-height: 38px; color: #344b3d;
+}
+.qingfan-window .task-row .task-pick label { font-size: 13px; font-weight: 500; color: #344b3d; }
+.qingfan-window .task-row.is-current .task-pick label { color: #23543a; font-weight: 700; }
+.qingfan-window .task-row.is-done .task-pick label { color: #607266; text-decoration: line-through; }
+.qingfan-window checkbutton { padding: 2px; }
+.qingfan-window checkbutton check { border: 1px solid #b7c5ba; border-radius: 5px; background: #fff; box-shadow: none; }
+.qingfan-window checkbutton check:checked { background: #548269; border-color: #548269; color: white; }
+.qingfan-window .list-scroller { background: transparent; border: 0; }
+.qingfan-window .list-scroller viewport { background: transparent; }
+.qingfan-window .empty-title { color: #607266; font-size: 13px; }
+.qingfan-window .empty-subtitle { color: #607266; font-size: 12px; }
+.qingfan-window.break-mode .time { color: #416783; }
+.qingfan-window.break-mode .progress progress { background: #7294ad; }
+.qingfan-window.break-mode button.primary { background: #476f88; border-color: #476f88; }
+.qingfan-window.break-mode button.primary:hover { background: #385d76; }
+.qingfan-window .task-row entry { min-width: 0; padding: 4px; }
+.qingfan-window .task-row button.icon-button { min-width: 22px; min-height: 26px; padding: 3px; }
