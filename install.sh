@@ -36,7 +36,7 @@ for key, value in values.items():
 entry.save_to_file(destination)
 PYDESKTOP
 chmod 644 "$DESKTOP_DIR/app.qingfan.Pomodoro.desktop"
-# Retire the desktop shortcut from V1 (never touches task data).
+# Clean up obsolete launcher names created during prototyping.
 rm -f -- "$HOME/.local/share/applications/qingfan.desktop"
-printf '\n%s\n' '青番 2.0 已安装。可从应用菜单搜索「青番」启动。' \
-  '数据保留在 ~/.local/share/qingfan/state.json，兼容 1.x 版本。'
+printf '\n%s\n' '青番 1.0 已安装。可从应用菜单搜索「青番」启动。' \
+  '任务数据保存在 ~/.local/share/qingfan/state.json。'
