@@ -125,12 +125,24 @@ class FocusOrb(Gtk.ApplicationWindow):
 
     def set_mini(self, mini):
         mini = bool(mini)
+        if mini == self.mini and self.canvas.get_size_request() == (self.MINI if mini else self.FULL):
+            return
+        was_mapped = self.get_mapped()
+        if was_mapped:
+            # Re-map to clear the window manager's last content-size hints.
+            # A resize request alone does not reliably reduce Gtk.Overlay's
+            # already allocated toplevel size on X11.
+            self.hide()
         self.mini = mini
         self.controls.set_visible(not mini)
         size = self.MINI if mini else self.FULL
         self.canvas.set_size_request(*size)
+        self.overlay.queue_resize()
+        self.set_default_size(*size)
         self.resize(*size)
-        self.queue_draw()
+        if was_mapped:
+            self.show()
+        self.canvas.queue_draw()
 
     def toggle_mini(self, *_):
         self.set_mini(not self.mini)
