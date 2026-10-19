@@ -101,7 +101,7 @@ class FocusGuiTests(GuiTests):
         first_row, second_row = self.window.rows_box.get_children()[:2]
         first_check, second_check = first_row.get_children()[0], second_row.get_children()[0]
         self.assertIsInstance(first_check, Gtk.CheckButton)
-        self.assertTrue(first_check.get_active())
+        self.assertFalse(first_check.get_active(), 'unchecked means the task is not completed')
         self.assertFalse(second_check.get_active())
 
         second_stack = next(child for child in second_row.get_children() if isinstance(child, Gtk.Stack))
