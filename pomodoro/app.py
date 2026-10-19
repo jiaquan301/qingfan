@@ -245,6 +245,7 @@ class Window(Gtk.ApplicationWindow):
             self.list_button.set_tooltip_text('展开任务清单  Ctrl+L')
             self.list_button.get_style_context().remove_class('selected')
         else:
+            self.refresh_tasks()  # Recompute checkbox sensitivity after timer state changes.
             self.task_panel.show_all()
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('收起任务清单  Ctrl+L')
