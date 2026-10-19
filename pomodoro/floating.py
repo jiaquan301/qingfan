@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import math
 
+import gi
+gi.require_version('PangoCairo', '1.0')
 from gi.repository import Gdk, GLib, Gtk, Pango, PangoCairo
 
 
@@ -146,9 +148,14 @@ class FocusOrb(Gtk.ApplicationWindow):
         height = widget.get_allocated_height()
         cr.save()
         # Full alpha clear; compositor may be absent on some X11 desktops.
-        cr.set_operator(0)  # cairo.OPERATOR_CLEAR
-        cr.paint()
-        cr.set_operator(2)  # cairo.OPERATOR_OVER
+        if self.has_rgba_visual:
+            cr.set_operator(0)  # cairo.OPERATOR_CLEAR
+            cr.paint()
+            cr.set_operator(2)  # cairo.OPERATOR_OVER
+        else:
+            # Graceful fallback when the X11 desktop cannot composite alpha.
+            cr.set_source_rgb(0.97, 0.98, 0.96)
+            cr.paint()
         alpha = self.host.model.display.get('opacity', 0.9)
         phase = self.host.model.phase
         is_break = phase != 'focus'
