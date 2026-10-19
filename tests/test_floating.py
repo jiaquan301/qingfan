@@ -137,8 +137,9 @@ class FloatingOrbGuiTests(unittest.TestCase):
         self.assertEqual(self.window.model.deadline, deadline)
 
     def test_settings_and_pin_are_persisted(self):
-        self.window.toggle_pin()
+        with patch.object(self.window.orb_window, 'set_keep_above') as set_above:
+            self.window.toggle_pin()
+            set_above.assert_called_once_with(False)
         self.assertFalse(self.window.model.display['pinned'])
-        self.assertFalse(self.window.orb_window.get_keep_above())
         self.window.model.save()
         self.assertFalse(Model.load().display['pinned'])
