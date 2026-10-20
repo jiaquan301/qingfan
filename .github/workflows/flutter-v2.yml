@@ -9,6 +9,10 @@ on:
       - '.github/workflows/flutter-v2.yml'
       - 'docs/v2-**'
 
+concurrency:
+  group: qingfan-v2-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
