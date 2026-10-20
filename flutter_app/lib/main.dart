@@ -52,6 +52,7 @@ Future<void> _nativeSmoke(
   Future<void> check(String name, Size requested) async {
     await Future<void>.delayed(const Duration(milliseconds: 450));
     final measured = await windowManager.getSize();
+    stdout.writeln('NATIVE_SMOKE_OBSERVED $name expected=${requested.width}x${requested.height} actual=${measured.width}x${measured.height}');
     if ((requested.width - measured.width).abs() > 4 ||
         (requested.height - measured.height).abs() > 4) {
       throw StateError('$name size expected $requested but was $measured');
