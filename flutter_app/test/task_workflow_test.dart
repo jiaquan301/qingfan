@@ -1,6 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qingfan/main.dart' show QingfanApp;
+import 'package:qingfan/infrastructure/window_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qingfan/application/qingfan_controller.dart';
 import 'package:qingfan/infrastructure/local_store.dart';
@@ -104,6 +107,20 @@ void main() {
         .where((file) => file.path.contains('.broken-'));
     expect(quarantined.length, 1);
     expect(await quarantined.single.readAsString(), '{broken json');
+  });
+
+  testWidgets('Space typed inside task input must not toggle focus', (tester) async {
+    final c = QingfanController();
+    c.openPanel(OpenPanel.tasks);
+    await tester.pumpWidget(
+      QingfanApp(controller: c, bridge: DesktopWindowBridge()),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('newTask')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    expect(c.engine.isRunning, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
   });
 
   testWidgets('5, 20 and 50 tasks keep the primary action fixed and reachable',
