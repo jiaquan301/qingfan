@@ -35,7 +35,7 @@ trap 'rm -f "$seen_file"; cleanup' EXIT
 watch_pid=$!
 # Launch a second instance while the main native window is alive. It must
 # detect the held OS lock, return immediately, and never create another view.
-QINGFAN_NATIVE_SMOKE=1 timeout 35s "$app" >native-smoke.log 2>&1 &
+QINGFAN_NATIVE_SMOKE=1 QINGFAN_NATIVE_DRAG=1 timeout 55s "$app" >native-smoke.log 2>&1 &
 main_pid=$!
 # Wait for the primary window to become real and publish a geometry result
 # BEFORE attempting a second start. Racing both GTK runners at boot would
@@ -54,9 +54,58 @@ if [[ "$ready" != "1" ]]; then
   echo "NATIVE_PRIMARY_STARTUP_FAILED" >&2
   exit 1
 fi
+# X11 end-to-end: click-and-hold on the visible outer dial ring and
+# physically move the pointer. wmctrl must report the actual GTK window moved.
+# This catches the old onPressed callback that ran on mouse-up (too late).
+wait_for_drag_scene() {
+  local scene="$1"
+  for _ in $(seq 1 90); do
+    if grep -q "NATIVE_DRAG_READY $scene" native-smoke.log; then
+      return 0
+    fi
+    if ! kill -0 "$main_pid" >/dev/null 2>&1; then break; fi
+    sleep .08
+  done
+  cat native-smoke.log
+  echo "NATIVE_DRAG_SCENE_TIMEOUT $scene" >&2
+  return 1
+}
+move_window_by_pointer() {
+  local scene="$1"
+  local geometry xy x y w h target_x target_y after_x after_y
+  geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
+  read -r x y w h < <(awk '{print $3, $4, $5, $6}' <<< "$geometry")
+  # Ring top contains no click button or timer centre in either geometry.
+  target_x=$((x + w / 2))
+  target_y=$((y + 24))
+  xdotool mousemove --sync "$target_x" "$target_y"
+  xdotool mousedown 1
+  sleep .15
+  xdotool mousemove --sync $((target_x + 70)) $((target_y + 45))
+  sleep .20
+  xdotool mousemove --sync $((target_x + 125)) $((target_y + 85))
+  sleep .20
+  xdotool mouseup 1
+  sleep .25
+  geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
+  read -r after_x after_y < <(awk '{print $3, $4}' <<< "$geometry")
+  echo "NATIVE_DRAG_POSITION $scene: ($x,$y) -> ($after_x,$after_y)"
+  if (( after_x - x < 25 && x - after_x < 25 &&
+        after_y - y < 25 && y - after_y < 25 )); then
+    echo "NATIVE_DRAG_FAILED $scene: GTK window did not move" >&2
+    return 1
+  fi
+  echo "NATIVE_DRAG_PASS $scene"
+}
+wait_for_drag_scene full
+move_window_by_pointer full
 set +e
 timeout 15s "$app" >native-second-instance.log 2>&1
 second_status=$?
+set -e
+wait_for_drag_scene mini
+move_window_by_pointer mini
+set +e
 wait "$main_pid"
 status=$?
 set -e
