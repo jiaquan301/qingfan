@@ -701,7 +701,8 @@ class Window(Gtk.ApplicationWindow):
         check.set_active(done)
         check.set_tooltip_text('恢复为待办任务' if done else '标记任务完成')
         check.get_accessible().set_name('恢复为待办任务' if done else '标记任务完成')
-        check.set_sensitive(not (active and self.model.phase == 'focus' and self.model.running()))
+        # Keep the control clickable so the user receives a clear explanation
+        # when trying to complete the task during a running focus.
         check.connect('toggled', lambda widget: self.complete_task(tid, widget.get_active()))
         row.pack_start(check, False, False, 0)
 
