@@ -862,7 +862,12 @@ class Window(Gtk.ApplicationWindow):
                 return candidate
         return next((task['id'] for task in self.model.pending_tasks), None)
 
-    def _capture_undo_state(self, task_id=None):
+    def _capture_undo_state(self, task_id):
+        # Inverse operation for one task, not a snapshot of the entire list:
+        # users may add or edit OTHER tasks within the seven-second undo
+        # window, and those edits must never be erased by an unrelated undo.
+        index = next(i for i, task in enumerate(self.model.tasks) if task['id'] == task_id)
+        task = self.model.tasks[index]
         timer = None
         if task_id == self.model.current_id and self.model.phase == 'focus' and not self.model.running():
             timer = {
@@ -872,12 +877,15 @@ class Window(Gtk.ApplicationWindow):
                 'completed_rounds': self.model.completed_rounds,
             }
         return {
-            'tasks': [dict(task) for task in self.model.tasks],
+            'task': dict(task),
+            'index': index,
             'current_id': self.model.current_id,
+            'after_current_id': None,
             'timer': timer,
         }
 
     def _record_undo(self, snapshot, message):
+        snapshot['after_current_id'] = self.model.current_id
         self._undo_state = snapshot
         self.undo_label.set_text(message)
         self.undo_bar.set_no_show_all(False)
@@ -900,7 +908,7 @@ class Window(Gtk.ApplicationWindow):
             return
 
         pending_before = self.model.pending_tasks
-        snapshot = self._capture_undo_state(tid if was_current else None)
+        snapshot = self._capture_undo_state(tid)
         if done and was_current and self._has_partial_focus():
             self.model.reset()
         if not self.model.complete(tid, done):
@@ -928,7 +936,7 @@ class Window(Gtk.ApplicationWindow):
         if was_current and not self._confirm_discard_partial('删除当前任务'):
             return
         pending_before = self.model.pending_tasks
-        snapshot = self._capture_undo_state(tid if was_current else None)
+        snapshot = self._capture_undo_state(tid)
         index = next(i for i, item in enumerate(self.model.tasks) if item['id'] == tid)
         self._deleted_task = (task.copy(), index, was_current)
         if was_current and self._has_partial_focus():
@@ -961,15 +969,30 @@ class Window(Gtk.ApplicationWindow):
         if self._undo_source is not None:
             GLib.source_remove(self._undo_source)
             self._undo_source = None
-        self.model.tasks = [dict(task) for task in snapshot['tasks']]
-        self.model.current_id = snapshot['current_id']
-        timer = snapshot.get('timer')
-        if timer:
-            self.model.phase = timer['phase']
-            self.model.remaining = timer['remaining']
-            self.model.phase_duration = timer['phase_duration']
-            self.model.completed_rounds = timer['completed_rounds']
-            self.model.deadline = None
+        target = snapshot['task']
+        tid = target['id']
+        # Reverse only the affected task, preserving unrelated new tasks,
+        # reorderings, edits and completed counts since this operation.
+        self.model.tasks = [task for task in self.model.tasks if task['id'] != tid]
+        if target['done']:
+            start = len(self.model.pending_tasks)
+            insert_at = max(start, min(snapshot['index'], len(self.model.tasks)))
+        else:
+            insert_at = min(snapshot['index'], len(self.model.pending_tasks))
+        self.model.tasks.insert(insert_at, dict(target))
+        previous_current = snapshot['current_id']
+        if (self.model.current_id == snapshot['after_current_id']
+                and (previous_current is None
+                     or any(task['id'] == previous_current and not task['done']
+                            for task in self.model.tasks))):
+            self.model.current_id = previous_current
+            timer = snapshot.get('timer')
+            if timer and not self.model.running():
+                self.model.phase = timer['phase']
+                self.model.remaining = timer['remaining']
+                self.model.phase_duration = timer['phase_duration']
+                self.model.completed_rounds = timer['completed_rounds']
+                self.model.deadline = None
         self._deleted_task = None
         self.undo_bar.hide()
         self.undo_bar.set_no_show_all(True)
