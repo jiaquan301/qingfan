@@ -27,7 +27,7 @@ class DesktopWindowBridge {
       size: sizeFor(controller.mode, controller.panel),
       minimumSize: miniSize,
       center: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFF5F7F4),
       titleBarStyle: TitleBarStyle.hidden,
       skipTaskbar: false,
     );
