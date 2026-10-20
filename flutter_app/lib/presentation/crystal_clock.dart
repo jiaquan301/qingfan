@@ -54,6 +54,20 @@ class CrystalClock extends StatelessWidget {
                   ),
                 ),
               ),
+              // Blank areas of the dial are the native window drag surface.
+              // Foreground actions and the centre timer tap sit above it in
+              // the Stack's hit-test order, so dragging cannot toggle focus.
+              Positioned.fill(
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.move,
+                  child: GestureDetector(
+                    key: const Key('clockDragSurface'),
+                    behavior: HitTestBehavior.opaque,
+                    onPanStart: (_) => onDrag(),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
               if (!mini)
                 Positioned(
                   top: diameter * .24,
@@ -164,7 +178,7 @@ class CrystalClock extends StatelessWidget {
                 ),
                 Positioned(
                   bottom: 0,
-                  child: _OrbIcon(Icons.drag_indicator_rounded, '拖动窗口', onDrag),
+                  child: _WindowDragHandle(onDrag: onDrag),
                 ),
               ] else ...[
                 Positioned(
@@ -176,8 +190,7 @@ class CrystalClock extends StatelessWidget {
                 Positioned(
                   bottom: 0,
                   left: 0,
-                  child: _OrbIcon(Icons.drag_indicator_rounded, '拖动窗口', onDrag,
-                      mini: true),
+                  child: _WindowDragHandle(onDrag: onDrag, mini: true),
                 ),
                 Positioned(
                   bottom: 0,
@@ -192,6 +205,38 @@ class CrystalClock extends StatelessWidget {
       );
     });
   }
+}
+
+/// Starts an OS-level window move while the pointer is still pressed and
+/// moving. A normal IconButton.onPressed fires on mouse-up, too late for
+/// gtk_window_begin_move_drag on Linux, which explains the broken handle.
+class _WindowDragHandle extends StatelessWidget {
+  const _WindowDragHandle({required this.onDrag, this.mini = false});
+
+  final VoidCallback onDrag;
+  final bool mini;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: '按住并拖动窗口',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.move,
+          child: GestureDetector(
+            key: Key(mini ? 'miniDragHandle' : 'fullDragHandle'),
+            behavior: HitTestBehavior.opaque,
+            onPanStart: (_) => onDrag(),
+            child: SizedBox(
+              height: mini ? 28 : 40,
+              width: mini ? 28 : 40,
+              child: Icon(
+                Icons.drag_indicator_rounded,
+                size: mini ? 15 : 20,
+                color: _accent,
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _OrbIcon extends StatelessWidget {
