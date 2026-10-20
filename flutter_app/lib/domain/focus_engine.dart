@@ -23,13 +23,10 @@ enum RunState { idle, running, paused }
 class FocusEngine {
   FocusEngine({
     MillisClock? clock,
-    int focusMinutes = 25,
-    int shortBreakMinutes = 5,
-    int longBreakMinutes = 15,
-  })  : _clock = clock ?? SystemMillisClock(),
-        focusMinutes = focusMinutes,
-        shortBreakMinutes = shortBreakMinutes,
-        longBreakMinutes = longBreakMinutes {
+    this.focusMinutes = 25,
+    this.shortBreakMinutes = 5,
+    this.longBreakMinutes = 15,
+  }) : _clock = clock ?? SystemMillisClock() {
     _remainingAtStart = phaseDurationMillis;
   }
 
