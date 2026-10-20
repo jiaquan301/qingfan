@@ -148,12 +148,11 @@ class _TaskDrawerState extends State<TaskDrawer> {
                     key: ValueKey(query.isEmpty ? 'all' : 'filtered'),
                     buildDefaultDragHandles: false,
                     itemCount: pending.length,
-                    onReorder: (oldIndex, newIndex) {
+                    onReorderItem: (oldIndex, newIndex) {
                       if (query.isNotEmpty) {
                         _message('请清除搜索后再排序');
                         return;
                       }
-                      if (newIndex > oldIndex) newIndex--;
                       c.reorderTask(oldIndex, newIndex);
                     },
                     itemBuilder: (context, index) {
@@ -175,7 +174,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
                         child: Row(children: [
                           Checkbox(
                             value: task.done,
-                            tooltip: '标记任务完成',
+                            semanticLabel: '标记任务完成',
                             onChanged: (_) => _toggleDone(task),
                           ),
                           Expanded(
