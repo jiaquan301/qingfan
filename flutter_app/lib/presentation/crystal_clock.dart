@@ -75,9 +75,9 @@ class CrystalClock extends StatelessWidget {
                       : '开始或继续专注',
                   child: Tooltip(
                     message: controller.engine.isRunning ? '点击暂停' : '点击开始 / 继续',
-                    child: InkWell(
+                    child: GestureDetector(
                       key: const Key('clockCenter'),
-                      customBorder: const CircleBorder(),
+                      behavior: HitTestBehavior.opaque,
                       onTap: controller.toggleFocus,
                       child: SizedBox(
                         width: mini ? diameter * .64 : diameter * .75,
