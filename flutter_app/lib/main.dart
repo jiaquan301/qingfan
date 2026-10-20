@@ -127,9 +127,17 @@ Future<void> _nativeSmoke(
 
   try {
     await check('full', DesktopWindowBridge.fullSize);
+    if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
+      stdout.writeln('NATIVE_DRAG_READY full');
+      await Future<void>.delayed(const Duration(seconds: 5));
+    }
     controller.setMode(ClockMode.mini);
     await bridge.setSurface(controller);
     await check('mini', DesktopWindowBridge.miniSize);
+    if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
+      stdout.writeln('NATIVE_DRAG_READY mini');
+      await Future<void>.delayed(const Duration(seconds: 5));
+    }
     controller.setMode(ClockMode.full);
     await bridge.setSurface(controller);
     await check('full_return', DesktopWindowBridge.fullSize);
