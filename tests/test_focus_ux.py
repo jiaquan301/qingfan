@@ -96,6 +96,34 @@ class FocusGuiTests(GuiTests):
         self.assertFalse(self.window.model.running())
         self.assertTrue(self.window.compact)
 
+    def test_primary_task_action_starts_focus_and_closes_manager(self):
+        self.assertEqual(self.window.task_primary_button.get_label(), '开始专注')
+        self.assertTrue(self.window.task_primary_button.get_sensitive())
+        self.window.task_primary_button.clicked()
+        self.assertTrue(self.window.model.running())
+        self.assertTrue(self.window.compact)
+        self.assertTrue(self.window.orb_window.get_visible())
+        self.window._set_mode(False)
+        self.assertEqual(self.window.task_primary_button.get_label(), '返回专注')
+        deadline = self.window.model.deadline
+        self.window.task_primary_button.clicked()
+        self.assertEqual(self.window.model.deadline, deadline)
+        self.assertTrue(self.window.compact)
+
+    def test_current_task_completion_click_during_focus_prompts_without_stopping(self):
+        current = self.window.model.current_id
+        self.window.task_primary_button.clicked()
+        deadline = self.window.model.deadline
+        self.window._set_mode(False)
+        check = self.window.rows_box.get_children()[0].get_children()[0]
+        self.assertTrue(check.get_sensitive())
+        check.set_active(True)
+        self.assertEqual(self.window.model.current_id, current)
+        self.assertFalse(next(task for task in self.window.model.tasks
+                              if task['id'] == current)['done'])
+        self.assertEqual(self.window.model.deadline, deadline)
+        self.assertIn('请先暂停', self.window.status_label.get_text())
+
     def test_checkbox_means_complete_and_title_selects_current_task(self):
         first, second = (task["id"] for task in self.window.model.tasks[:2])
         self.assertEqual(self.window.model.current_id, first)
