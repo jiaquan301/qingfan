@@ -232,12 +232,45 @@ class QingfanController extends ChangeNotifier {
     final destination = math.max(0, math.min(newIndex, pendingTasks.length - 1));
     final task = pendingTasks.removeAt(oldIndex);
     pendingTasks.insert(destination, task);
+    final completedTasks = completed;
     tasks
       ..clear()
       ..addAll(pendingTasks)
-      ..addAll(completed);
+      ..addAll(completedTasks);
     notifyListeners();
     _scheduleSave();
+  }
+
+  void renameTask(String id, String title) {
+    final clean = title.trim();
+    if (clean.isEmpty) return;
+    for (final task in tasks) {
+      if (task.id == id) {
+        task.title = clean.substring(0, math.min(120, clean.length));
+        notifyListeners();
+        _scheduleSave();
+        return;
+      }
+    }
+  }
+
+  bool deleteTask(String id, {bool discardPartial = false}) {
+    final index = tasks.indexWhere((t) => t.id == id);
+    if (index < 0) return false;
+    final isCurrent = selectedTaskId == id;
+    if (isCurrent && engine.isRunning) return false;
+    if (isCurrent && engine.hasPartialFocus && !discardPartial) return false;
+    if (isCurrent && engine.hasPartialFocus) engine.reset();
+    tasks.removeAt(index);
+    if (isCurrent) {
+      final remaining = pending;
+      selectedTaskId = remaining.isEmpty
+          ? null
+          : remaining[math.min(index, remaining.length - 1)].id;
+    }
+    notifyListeners();
+    _scheduleSave();
+    return true;
   }
 
   void configureTimes(int focus, int shortBreak, int longBreak) {
@@ -292,7 +325,7 @@ class QingfanController extends ChangeNotifier {
     if (_store == null) return;
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 450), () {
-      _store.save(toJson());
+      unawaited(_store.save(toJson()));
     });
   }
 
