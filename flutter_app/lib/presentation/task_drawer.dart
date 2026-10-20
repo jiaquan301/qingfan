@@ -146,6 +146,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
           ),
           const SizedBox(height: 10),
           TextField(
+            key: const Key('taskSearch'),
             controller: _search,
             decoration: InputDecoration(
               hintText: '搜索任务',
