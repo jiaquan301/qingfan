@@ -28,14 +28,33 @@ elif ('gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)))'
       not in source):
     raise SystemExit("Flutter Linux runner display timing not recognized")
 
-# The generated runner explicitly paints its own black surface BEFORE Dart
-# applies WindowOptions. Give the underlying Flutter surface an alpha channel.
+# The GTK toplevel must use an RGBA visual before it gets realized,
+# otherwise Flutter alpha would still composite against an opaque surface.
+window_anchor = (
+    "  GtkWindow* window =\n"
+    "      GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));"
+)
+rgba_visual = (
+    window_anchor + "\n\n"
+    "  GdkScreen* qingfan_screen = gtk_window_get_screen(window);\n"
+    "  GdkVisual* qingfan_rgba = gdk_screen_get_rgba_visual(qingfan_screen);\n"
+    "  if (qingfan_rgba && gdk_screen_is_composited(qingfan_screen)) {\n"
+    "    gtk_widget_set_visual(GTK_WIDGET(window), qingfan_rgba);\n"
+    "    gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);\n"
+    "  }"
+)
+if source.count(window_anchor) == 1:
+    source = source.replace(window_anchor, rgba_visual, 1)
+elif "GdkVisual* qingfan_rgba" not in source:
+    raise SystemExit("Flutter GTK toplevel anchor not recognized")
+
+# Alpha is carried through BOTH the GTK visual and FlView backing.
 old_background = 'gdk_rgba_parse(&background_color, "#000000");'
-new_background = 'gdk_rgba_parse(&background_color, "#F5F7F4");'
+new_background = 'gdk_rgba_parse(&background_color, "#00000000");'
 if source.count(old_background) == 1:
     source = source.replace(old_background, new_background, 1)
 elif source.count(new_background) != 1:
     raise SystemExit("Flutter Linux background color template not recognized")
 
 runner.write_text(source, encoding="utf-8")
-print("LINUX_RUNNER_PATCH_PASS: default=376x408, first-frame show, visible fallback surface")
+print("LINUX_RUNNER_PATCH_PASS: default=376x408, first-frame show, RGBA visual + transparent view")
