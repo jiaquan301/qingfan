@@ -8,7 +8,7 @@ AppVersion={#AppVersion}
 AppPublisher=Qingfan
 DefaultDirName={autopf}\Qingfan
 DefaultGroupName=Qingfan
-OutputDir=dist
+OutputDir=..\dist
 OutputBaseFilename=qingfan-v2-windows-x64-installer-unsigned
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -20,7 +20,7 @@ UninstallDisplayName=青番
 WizardStyle=modern
 
 [Files]
-Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
 Name: "{autoprograms}\青番"; Filename: "{app}\qingfan.exe"
