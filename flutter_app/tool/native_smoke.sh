@@ -52,6 +52,18 @@ for scene in full mini full_return tasks close_tasks; do
   grep -q "NATIVE_SMOKE_SIZE $scene:" native-smoke.log ||
     { echo "Missing native geometry check: $scene" >&2; exit 1; }
 done
+if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
+  for scene in full mini full_return tasks close_tasks; do
+    shot="native-shots/$scene.png"
+    [[ -s "$shot" ]] ||
+      { echo "NATIVE_SCREENSHOT_MISSING $scene" >&2; exit 1; }
+    entropy="$(identify -format '%[entropy]' "$shot")"
+    echo "NATIVE_SCREENSHOT_ENTROPY $scene=$entropy"
+    awk -v entropy="$entropy" 'BEGIN { exit !(entropy > 0.01) }' ||
+      { echo "NATIVE_SCREENSHOT_BLANK $scene entropy=$entropy" >&2; exit 1; }
+  done
+  echo 'NATIVE_VISUAL_CONTENT_PASS'
+fi
 max_count="$(sort -nr "$seen_file" | head -1)"
 echo "NATIVE_SMOKE_MAX_WINDOWS=$max_count"
 [[ "$max_count" == "1" ]] ||
