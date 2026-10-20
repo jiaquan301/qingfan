@@ -34,15 +34,25 @@ class DesktopWindowBridge {
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.setAsFrameless();
       await windowManager.setTitle('青番');
-      await windowManager.setResizable(false);
+      // Flutter's default Linux runner starts at 1280x720. Do not freeze
+      // that initial geometry before requesting the final 376x408 size.
+      await windowManager.setResizable(true);
+      await windowManager.setSize(sizeFor(controller.mode, controller.panel));
       await applyTopmost(controller);
       await windowManager.show();
+      await windowManager.setSize(sizeFor(controller.mode, controller.panel));
+      await windowManager.setResizable(false);
       await windowManager.focus();
     });
   }
 
   Future<void> setSurface(QingfanController controller) async {
+    // Make the native GTK window temporarily resizable before a
+    // programmatic mode change; resizing nonresizable windows is
+    // window-manager dependent and may silently keep the old dimensions.
+    await windowManager.setResizable(true);
     await windowManager.setSize(sizeFor(controller.mode, controller.panel));
+    await windowManager.setResizable(false);
     await applyTopmost(controller);
   }
 
