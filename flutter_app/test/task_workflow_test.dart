@@ -136,8 +136,14 @@ void main() {
       expect(initialRect.top, greaterThanOrEqualTo(0));
 
       if (count == 50) {
-        await tester.scrollUntilVisible(find.text('任务 49'),
-            260, scrollable: find.byKey(const Key('taskScroll')));
+        await tester.scrollUntilVisible(
+          find.text('任务 49'),
+          260,
+          scrollable: find.descendant(
+            of: find.byKey(const Key('taskScroll')),
+            matching: find.byType(Scrollable),
+          ).first,
+        );
         await tester.pumpAndSettle();
         final afterScrollRect = tester.getRect(action);
         expect(afterScrollRect.top, initialRect.top);
