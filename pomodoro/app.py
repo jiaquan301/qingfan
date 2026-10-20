@@ -103,6 +103,7 @@ class Window(Gtk.ApplicationWindow):
         self.set_gravity(Gdk.Gravity.NORTH_WEST)
         self.set_keep_above(self.pinned)
         self.connect('delete-event', self.on_close)
+        self.connect('configure-event', self._on_window_configure)
         self.connect('key-press-event', self.on_shortcut)
         # Labels and blank panel space cannot normally take keyboard focus;
         # background clicks must still finish an active inline editor.
@@ -247,9 +248,13 @@ class Window(Gtk.ApplicationWindow):
         self.scroller.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.scroller.set_shadow_type(Gtk.ShadowType.NONE)
         self.scroller.set_hexpand(True)
-        self.scroller.set_vexpand(True)
-        self.scroller.set_size_request(-1, 100)
-        inside.pack_start(self.scroller, True, True, 0)
+        # GTK's CSD header consumes space outside the task content allocation.
+        # An expanding scroller can push the fixed bottom action below the
+        # actual toplevel viewport on X11. Give it a bounded, resize-aware
+        # height instead of greedily consuming the entire content allocation.
+        self.scroller.set_vexpand(False)
+        self.scroller.set_size_request(-1, 250)
+        inside.pack_start(self.scroller, False, False, 0)
 
         self.list_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.scroller.add(self.list_content)
@@ -358,8 +363,22 @@ class Window(Gtk.ApplicationWindow):
             self._manager_size = (self.TASK_WINDOW_WIDTH, self._manager_default_height())
         width, height = self._manager_size
         self._manager_size = (min(width, max_width), min(height, self._manager_max_height()))
+        self._size_task_scroller(self._manager_size[1])
         self.set_default_size(*self._manager_size)
         self.resize(*self._manager_size)
+
+    def _size_task_scroller(self, window_height):
+        # Account for the header bar, fixed title/add/footer controls and a
+        # safety margin for client-side decoration allocation.
+        target = max(100, min(350, int(window_height) - 270))
+        if self.scroller.get_size_request()[1] != target:
+            self.scroller.set_size_request(-1, target)
+
+    def _on_window_configure(self, _widget, event):
+        if not self.compact and event.width >= self.TASK_WINDOW_MIN_WIDTH:
+            self._manager_size = (int(event.width), int(event.height))
+            self._size_task_scroller(event.height)
+        return False
 
     def _set_mode(self, compact):
         self._finish_edit()
