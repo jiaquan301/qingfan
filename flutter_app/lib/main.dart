@@ -217,6 +217,54 @@ class _QingfanAppState extends State<QingfanApp> {
     _surface(() => c.openPanel(OpenPanel.settings));
   }
 
+  Future<void> _showMoreMenu() async {
+    // Low-frequency operations belong to a discoverable secondary menu,
+    // not four equally prominent corner buttons around the timepiece.
+    final selected = await showMenu<String>(
+      context: context,
+      position: const RelativeRect.fromLTRB(150, 255, 55, 65),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      color: const Color(0xFFF9FBF8),
+      items: [
+        const PopupMenuItem<String>(
+          value: 'settings',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.tune_rounded, size: 18),
+            title: Text('偏好设置'),
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'reset',
+          child: ListTile(
+            dense: true,
+            leading: Icon(Icons.restart_alt_rounded, size: 18),
+            title: Text('重新开始本轮'),
+          ),
+        ),
+        PopupMenuItem<String>(
+          value: 'pin',
+          child: ListTile(
+            dense: true,
+            leading: Icon(c.alwaysOnTop
+                ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 18),
+            title: Text(c.alwaysOnTop ? '取消置顶' : '始终置顶'),
+          ),
+        ),
+      ],
+    );
+    if (!mounted) return;
+    switch (selected) {
+      case 'settings':
+        _showSettings();
+      case 'reset':
+        await _confirmReset();
+      case 'pin':
+        c.setAlwaysOnTop(!c.alwaysOnTop);
+        await widget.bridge.applyTopmost(c);
+    }
+  }
+
   void _closePanel() {
     _surface(c.closePanel);
   }
@@ -294,7 +342,13 @@ class _QingfanAppState extends State<QingfanApp> {
             builder: (context, _) {
               final open = c.panel != OpenPanel.none;
               return Scaffold(
-                backgroundColor: Colors.transparent,
+                // Expanded task/settings workspaces are intentionally opaque.
+                // A transparent GTK window behind them would show as a
+                // large black rectangle on non-compositing Linux desktops.
+                backgroundColor: open ||
+                        widget.bridge.likelyWayland
+                    ? const Color(0xFFF8FAF7)
+                    : Colors.transparent,
                 body: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -306,13 +360,21 @@ class _QingfanAppState extends State<QingfanApp> {
                         onMode: _switchMode,
                         onReset: _confirmReset,
                         onDrag: widget.bridge.beginDrag,
-                        onMore: _switchMode,
+                        onMore: _showMoreMenu,
                       )
                     else
                       Row(
                         children: [
-                          SizedBox(
+                          Container(
                             width: 330,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF3F7F2),
+                              border: Border(
+                                right: BorderSide(
+                                  color: Color(0xFFE5EDE6), width: 1,
+                                ),
+                              ),
+                            ),
                             child: CrystalClock(
                               controller: c,
                               onTasks: _closePanel,
@@ -320,7 +382,7 @@ class _QingfanAppState extends State<QingfanApp> {
                               onMode: _closePanel,
                               onReset: _confirmReset,
                               onDrag: widget.bridge.beginDrag,
-                              onMore: _closePanel,
+                              onMore: _showMoreMenu,
                             ),
                           ),
                           Expanded(
