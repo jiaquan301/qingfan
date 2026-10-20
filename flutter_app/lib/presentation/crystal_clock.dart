@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../application/qingfan_controller.dart';
 
-const _ink = Color(0xFF153E31);
-const _accent = Color(0xFF337259);
-const _mist = Color(0xFF81978B);
-const _glass = Color(0xFFF7FBF9);
+const _ink = Color(0xFF173F34);
+const _accent = Color(0xFF38735E);
+const _muted = Color(0xFF80978B);
+const _surface = Color(0xFFF9FBF8);
 
-/// Primary clock surface. The centre is the only start/pause target.
-class CrystalClock extends StatelessWidget {
+/// A restrained, single-object timepiece. Only frequent actions are visible.
+/// Ring/unused dial space initiates native OS dragging; the centre is tap-only.
+class CrystalClock extends StatefulWidget {
   const CrystalClock({
     super.key,
     required this.controller,
@@ -31,175 +32,191 @@ class CrystalClock extends StatelessWidget {
   final VoidCallback onMore;
 
   @override
+  State<CrystalClock> createState() => _CrystalClockState();
+}
+
+class _CrystalClockState extends State<CrystalClock> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final mini = controller.mode == ClockMode.mini &&
-        controller.panel == OpenPanel.none;
+    final c = widget.controller;
+    final mini = c.mode == ClockMode.mini && c.panel == OpenPanel.none;
     return LayoutBuilder(builder: (context, constraints) {
-      final diameter = math.min(constraints.maxWidth - (mini ? 2 : 20),
-          constraints.maxHeight - (mini ? 2 : 20));
+      final diameter = math.max(
+        1.0,
+        math.min(
+          constraints.maxWidth - (mini ? 3 : 24),
+          constraints.maxHeight - (mini ? 3 : 24),
+        ),
+      );
       return Center(
         child: SizedBox.square(
           dimension: diameter,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _CrystalPainter(
-                    progress: controller.progress,
-                    opacity: controller.glassOpacity,
-                    phase: controller.engine.phase.name,
-                    running: controller.engine.isRunning,
-                    mini: mini,
-                  ),
-                ),
-              ),
-              // Blank areas of the dial are the native window drag surface.
-              // Foreground actions and the centre timer tap sit above it in
-              // the Stack's hit-test order, so dragging cannot toggle focus.
-              Positioned.fill(
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.move,
-                  child: GestureDetector(
-                    key: const Key('clockDragSurface'),
-                    behavior: HitTestBehavior.opaque,
-                    onPanStart: (_) => onDrag(),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-              if (!mini)
-                Positioned(
-                  top: diameter * .24,
-                  child: Text(
-                    controller.phaseLabel,
-                    style: const TextStyle(
-                      color: _mist,
-                      fontSize: 13,
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.w600,
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _TimepiecePainter(
+                      progress: c.progress,
+                      opacity: c.glassOpacity,
+                      phase: c.engine.phase.name,
+                      mini: mini,
                     ),
                   ),
                 ),
-              Center(
-                child: Semantics(
-                  button: true,
-                  label: controller.engine.isRunning
-                      ? '暂停专注'
-                      : '开始或继续专注',
-                  child: Tooltip(
-                    message: controller.engine.isRunning ? '点击暂停' : '点击开始 / 继续',
+                // Inactive dial material is a drag surface. Keeping it BELOW
+                // the centre and controls makes focus and drag independent.
+                Positioned.fill(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.move,
                     child: GestureDetector(
-                      key: const Key('clockCenter'),
+                      key: const Key('clockDragSurface'),
                       behavior: HitTestBehavior.opaque,
-                      onTap: controller.toggleFocus,
-                      child: SizedBox(
-                        width: mini ? diameter * .64 : diameter * .75,
-                        height: mini ? diameter * .68 : diameter * .42,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              controller.formattedTime,
-                              maxLines: 1,
-                              style: TextStyle(
-                                color: _ink,
-                                fontSize: mini ? 19 : 64,
-                                height: 1.03,
-                                letterSpacing: mini ? -1 : -2.7,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (!mini) ...[
-                              const SizedBox(height: 9),
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 220),
-                                child: Text(
-                                  controller.taskTitle,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: const TextStyle(
-                                    color: _accent,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                      onPanStart: (_) => widget.onDrag(),
+                      onSecondaryTapUp: (_) => widget.onMore(),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+                if (!mini)
+                  Positioned(
+                    top: diameter * .265,
+                    child: Text(
+                      c.phaseLabel,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _muted,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                Center(
+                  child: Semantics(
+                    button: true,
+                    label: c.engine.isRunning ? '暂停专注' : '开始或继续专注',
+                    child: Tooltip(
+                      message: c.engine.isRunning ? '点击暂停' : '点击开始 / 继续',
+                      child: GestureDetector(
+                        key: const Key('clockCenter'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: c.toggleFocus,
+                        child: SizedBox(
+                          width: diameter * (mini ? .62 : .73),
+                          height: diameter * (mini ? .52 : .36),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                c.formattedTime,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: _ink,
+                                  fontSize: mini ? 19 : 62,
+                                  height: 1.03,
+                                  letterSpacing: mini ? -.8 : -2.6,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              if (!mini) ...[
+                                const SizedBox(height: 12),
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 210),
+                                  child: Text(
+                                    c.taskTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: _accent,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: .3,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              if (!mini)
-                Positioned(
-                  bottom: diameter * .19,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(4, (index) {
-                      final complete = index < controller.engine.completedRounds % 4;
-                      return Container(
-                        width: 5,
-                        height: 5,
-                        margin: const EdgeInsets.symmetric(horizontal: 6),
-                        decoration: BoxDecoration(
-                          color: complete ? _accent : const Color(0xFFCEE1D5),
-                          shape: BoxShape.circle,
-                        ),
-                      );
-                    }),
+                if (!mini)
+                  Positioned(
+                    bottom: diameter * .215,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(4, (index) {
+                        final done = index < c.engine.completedRounds % 4;
+                        return Container(
+                          height: 4,
+                          width: 4,
+                          margin: const EdgeInsets.symmetric(horizontal: 5.5),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: done ? _accent : const Color(0xFFBED5CA),
+                          ),
+                        );
+                      }),
+                    ),
                   ),
-                ),
-              if (!mini) ...[
-                Positioned(
-                  left: diameter * .07,
-                  top: diameter * .075,
-                  child: _OrbIcon(Icons.format_list_bulleted_rounded, '任务清单', onTasks),
-                ),
-                Positioned(
-                  right: diameter * .07,
-                  top: diameter * .075,
-                  child: _OrbIcon(Icons.close_fullscreen_rounded, '迷你模式', onMode),
-                ),
-                Positioned(
-                  left: diameter * .07,
-                  bottom: diameter * .075,
-                  child: _OrbIcon(Icons.settings_outlined, '设置', onSettings),
-                ),
-                Positioned(
-                  right: diameter * .07,
-                  bottom: diameter * .075,
-                  child: _OrbIcon(Icons.refresh_rounded, '重置计时', onReset),
-                ),
-                Positioned(
-                  bottom: 0,
-                  child: _WindowDragHandle(onDrag: onDrag),
-                ),
-              ] else ...[
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: _OrbIcon(Icons.open_in_full_rounded, '展开时钟', onMode,
-                      mini: true),
-                ),
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  child: _WindowDragHandle(onDrag: onDrag, mini: true),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: _OrbIcon(Icons.more_horiz_rounded, '更多', onMore,
-                      mini: true),
-                ),
+                if (!mini) ...[
+                  Positioned(
+                    left: diameter * .155,
+                    top: diameter * .115,
+                    child: _QuietAction(
+                      label: '任务清单',
+                      icon: Icons.format_list_bulleted_rounded,
+                      onTap: widget.onTasks,
+                    ),
+                  ),
+                  Positioned(
+                    right: diameter * .155,
+                    top: diameter * .115,
+                    child: _QuietAction(
+                      label: '迷你模式',
+                      icon: Icons.open_in_full_rounded,
+                      onTap: widget.onMode,
+                    ),
+                  ),
+                  Positioned(
+                    bottom: diameter * .075,
+                    child: _QuietAction(
+                      label: '更多：设置、重置',
+                      icon: Icons.more_horiz_rounded,
+                      onTap: widget.onMore,
+                      small: true,
+                    ),
+                  ),
+                ] else
+                  Positioned(
+                    top: 4,
+                    right: 5,
+                    child: IgnorePointer(
+                      ignoring: !_hovered,
+                      child: AnimatedOpacity(
+                        opacity: _hovered ? 1 : 0,
+                        duration: const Duration(milliseconds: 135),
+                        child: _QuietAction(
+                          label: '展开时钟',
+                          icon: Icons.open_in_full_rounded,
+                          onTap: widget.onMode,
+                          small: true,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
-            ],
+            ),
           ),
         ),
       );
@@ -207,151 +224,121 @@ class CrystalClock extends StatelessWidget {
   }
 }
 
-/// Starts an OS-level window move while the pointer is still pressed and
-/// moving. A normal IconButton.onPressed fires on mouse-up, too late for
-/// gtk_window_begin_move_drag on Linux, which explains the broken handle.
-class _WindowDragHandle extends StatelessWidget {
-  const _WindowDragHandle({required this.onDrag, this.mini = false});
+class _QuietAction extends StatelessWidget {
+  const _QuietAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.small = false,
+  });
 
-  final VoidCallback onDrag;
-  final bool mini;
-
-  @override
-  Widget build(BuildContext context) => Tooltip(
-        message: '按住并拖动窗口',
-        child: MouseRegion(
-          cursor: SystemMouseCursors.move,
-          child: GestureDetector(
-            key: Key(mini ? 'miniDragHandle' : 'fullDragHandle'),
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (_) => onDrag(),
-            child: SizedBox(
-              height: mini ? 28 : 40,
-              width: mini ? 28 : 40,
-              child: Icon(
-                Icons.drag_indicator_rounded,
-                size: mini ? 15 : 20,
-                color: _accent,
-              ),
-            ),
-          ),
-        ),
-      );
-}
-
-class _OrbIcon extends StatelessWidget {
-  const _OrbIcon(this.icon, this.tooltip, this.callback, {this.mini = false});
-
+  final String label;
   final IconData icon;
-  final String tooltip;
-  final VoidCallback callback;
-  final bool mini;
+  final VoidCallback onTap;
+  final bool small;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-        message: tooltip,
-        child: Semantics(
-          button: true,
-          label: tooltip,
-          child: Material(
-            type: MaterialType.transparency,
-            child: IconButton(
-              tooltip: tooltip,
-              splashRadius: mini ? 15 : 20,
-              padding: EdgeInsets.zero,
-              constraints: BoxConstraints.tightFor(
-                width: mini ? 28 : 40,
-                height: mini ? 28 : 40,
-              ),
-              icon: Icon(icon, size: mini ? 15 : 20, color: _accent),
-              onPressed: callback,
-            ),
-          ),
+  Widget build(BuildContext context) => IconButton(
+        tooltip: label,
+        onPressed: onTap,
+        style: IconButton.styleFrom(
+          foregroundColor: _accent.withValues(alpha: .88),
+          hoverColor: const Color(0x253E7560),
+          highlightColor: const Color(0x183E7560),
         ),
+        padding: EdgeInsets.zero,
+        constraints: BoxConstraints.tightFor(
+          width: small ? 32 : 40,
+          height: small ? 32 : 40,
+        ),
+        icon: Icon(icon, size: small ? 17 : 19),
       );
 }
 
-class _CrystalPainter extends CustomPainter {
-  const _CrystalPainter({
+/// Matte-ivory crystal and machined fine ring, not a large flat gray disc.
+/// All pixels outside the circular painter remain fully transparent.
+class _TimepiecePainter extends CustomPainter {
+  const _TimepiecePainter({
     required this.progress,
     required this.opacity,
     required this.phase,
-    required this.running,
     required this.mini,
   });
 
   final double progress;
   final double opacity;
   final String phase;
-  final bool running;
   final bool mini;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final radius = math.min(size.width, size.height) / 2 - (mini ? 2 : 5);
-    final rect = Rect.fromCircle(center: center, radius: radius);
+    final r = size.shortestSide / 2 - (mini ? 1.8 : 3.0);
+    final outer = Rect.fromCircle(center: center, radius: r);
+    final fill = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(-.33, -.42),
+        radius: 1.24,
+        colors: [
+          Colors.white.withValues(alpha: opacity),
+          _surface.withValues(alpha: opacity * .96),
+          const Color(0xFFEAF2ED).withValues(alpha: opacity * .93),
+        ],
+        stops: const [0, .58, 1],
+      ).createShader(outer);
+    canvas.drawCircle(center, r, fill);
+
+    // One continuous polished bezel instead of several competing rings.
     canvas.drawCircle(
       center,
-      radius,
+      r - .95,
       Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-.32, -.58),
-          radius: 1.26,
-          colors: [
-            Colors.white.withValues(alpha: opacity),
-            _glass.withValues(alpha: opacity * .97),
-            const Color(0xFFE4EFE8).withValues(alpha: opacity * .90),
-          ],
-        ).createShader(rect),
-    );
-    canvas.drawCircle(
-      center,
-      radius - 0.8,
-      Paint()
-        ..color = Colors.white.withValues(alpha: .67)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6,
+        ..strokeWidth = mini ? .9 : 1.15
+        ..color = Colors.white.withValues(alpha: .86),
     );
-    final ringRadius = radius * (mini ? .82 : .76);
-    final track = Paint()
-      ..color = const Color(0xFFCBDED1).withValues(alpha: .64)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = mini ? 3.4 : 5.5
-      ..strokeCap = StrokeCap.round;
-    canvas.drawCircle(center, ringRadius, track);
-    final progressPaint = Paint()
-      ..color = phase == 'focus' ? _accent : const Color(0xFF4C7B87)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = mini ? 3.4 : 5.5
-      ..strokeCap = StrokeCap.round;
-    if (progress > 0.001) {
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: ringRadius),
-        -math.pi / 2,
-        2 * math.pi * progress.clamp(0, 1),
-        false,
-        progressPaint,
-      );
-    }
-    // A single restrained specular highlight gives a crafted glass edge.
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 3),
-      -math.pi * .82,
-      math.pi * .45,
+      Rect.fromCircle(center: center, radius: r - (mini ? 2 : 3)),
+      -math.pi * .89,
+      math.pi * .48,
       false,
       Paint()
-        ..color = Colors.white.withValues(alpha: .68)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = mini ? 1 : 2,
+        ..strokeWidth = mini ? .9 : 1.45
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white.withValues(alpha: .87),
     );
+
+    final ringR = r * (mini ? .80 : .775);
+    final thickness = mini ? 2.3 : 3.2;
+    final ringRect = Rect.fromCircle(center: center, radius: ringR);
+    canvas.drawCircle(
+      center,
+      ringR,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = thickness
+        ..color = const Color(0xFFD6E7DC).withValues(alpha: .75),
+    );
+    if (progress > 0.0001) {
+      canvas.drawArc(
+        ringRect,
+        -math.pi / 2,
+        progress.clamp(0.0, 1.0) * math.pi * 2,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = thickness
+          ..strokeCap = StrokeCap.round
+          ..color = phase == 'focus' ? _accent : const Color(0xFF668B94),
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(_CrystalPainter previous) =>
-      previous.progress != progress ||
-      previous.opacity != opacity ||
-      previous.phase != phase ||
-      previous.running != running ||
-      previous.mini != mini;
+  bool shouldRepaint(_TimepiecePainter old) =>
+      old.progress != progress ||
+      old.opacity != opacity ||
+      old.phase != phase ||
+      old.mini != mini;
 }
