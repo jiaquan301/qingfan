@@ -404,9 +404,12 @@ class Window(Gtk.ApplicationWindow):
                 self.orb_window.hide()
             self.hero.hide()
             self._adjust_height()
-            self.show()
             self.task_panel.show_all()
+            # Configure the selected task and primary button before mapping:
+            # otherwise the user sees a briefly disabled start button.
             self.refresh_tasks()
+            self.show()
+            GLib.idle_add(self._scroll_current_into_view)
             self.list_button.set_image(Gtk.Image.new_from_icon_name('view-restore-symbolic', Gtk.IconSize.BUTTON))
             self.list_button.set_tooltip_text('收起任务清单  Ctrl+L')
             style(self.list_button, 'selected')
