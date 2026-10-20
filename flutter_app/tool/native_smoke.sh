@@ -76,13 +76,15 @@ move_window_by_pointer() {
   geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
   read -r x y w h < <(awk '{print $3, $4, $5, $6}' <<< "$geometry")
   # Ring top contains no click button or timer centre in either geometry.
-  target_x=$((x + w / 2))
-  # Full dial is inset ~26px from the window top; position INSIDE the
-  # actual painted ring, not the transparent outside margin.
+  # The mini timer's centre hit target covers the upper middle of its dial.
+  # Use the LEFT ring at (12,52), far from both timer and corner controls.
+  # The full dial is inset ~26px; its top rim is a safe drag area.
   if [[ "$scene" == "full" ]]; then
+    target_x=$((x + w / 2))
     target_y=$((y + 54))
   else
-    target_y=$((y + 18))
+    target_x=$((x + 12))
+    target_y=$((y + h / 2))
   fi
   xdotool mousemove --sync "$target_x" "$target_y"
   xdotool mousedown 1
