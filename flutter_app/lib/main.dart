@@ -245,7 +245,7 @@ class _QingfanAppState extends State<QingfanApp> {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF5F7F4),
+        scaffoldBackgroundColor: Colors.transparent,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF337259)),
         fontFamily: null,
       ),
