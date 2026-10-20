@@ -27,7 +27,11 @@ class DesktopWindowBridge {
       size: sizeFor(controller.mode, controller.panel),
       minimumSize: miniSize,
       center: true,
-      backgroundColor: const Color(0xFFF5F7F4),
+      // Linux uses an RGBA GTK visual and a transparent FlView; when the
+      // compositor does not support alpha, GTK falls back to opaque drawing.
+      backgroundColor: Platform.isLinux
+          ? Colors.transparent
+          : const Color(0xFFF5F7F4),
       titleBarStyle: TitleBarStyle.hidden,
       skipTaskbar: false,
     );
