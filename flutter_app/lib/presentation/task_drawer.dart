@@ -106,10 +106,11 @@ class _TaskDrawerState extends State<TaskDrawer> {
     final completed = c.completed
         .where((t) => t.title.toLowerCase().contains(query))
         .toList();
-    return Container(
+    return Material(
       color: const Color(0xFFF9FCFA),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-      child: Column(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(children: [
@@ -308,6 +309,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
             child: Text(c.engine.isRunning ? '返回专注' : '开始专注'),
           ),
         ],
+        ),
       ),
     );
   }
