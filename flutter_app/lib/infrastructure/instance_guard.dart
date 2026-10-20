@@ -24,7 +24,7 @@ class InstanceGuard {
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
         await file.create(exclusive: true);
-        await file.writeAsString('${pid}\n', flush: true);
+        await file.writeAsString('$pid\n', flush: true);
         _lockFile = file;
         _ownerPid = pid;
         return true;
