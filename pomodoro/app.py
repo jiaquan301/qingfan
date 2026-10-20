@@ -370,7 +370,7 @@ class Window(Gtk.ApplicationWindow):
     def _size_task_scroller(self, window_height):
         # Account for the header bar, fixed title/add/footer controls and a
         # safety margin for client-side decoration allocation.
-        target = max(80, min(350, int(window_height) - 290))
+        target = max(30, min(300, int(window_height) - 350))
         if self.scroller.get_size_request()[1] != target:
             self.scroller.set_size_request(-1, target)
 
