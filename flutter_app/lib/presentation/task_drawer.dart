@@ -145,7 +145,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
           Row(children: [
             const Text('任务清单',
                 style: TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.w700,
+                    fontSize: 21, fontWeight: FontWeight.w600,
                     color: Color(0xFF153E31))),
             const SizedBox(width: 12),
             Text('${allPending.length} 项待办',
@@ -169,7 +169,16 @@ class _TaskDrawerState extends State<TaskDrawer> {
                 icon: const Icon(Icons.add_rounded),
                 onPressed: _add,
               ),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+              filled: true,
+              fillColor: Colors.white,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: Color(0xFFDDE7DF)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: Color(0xFF709A84)),
+              ),
               isDense: true,
             ),
             onSubmitted: (_) => _add(),
@@ -181,7 +190,16 @@ class _TaskDrawerState extends State<TaskDrawer> {
             decoration: InputDecoration(
               hintText: '搜索任务',
               prefixIcon: const Icon(Icons.search_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+              filled: true,
+              fillColor: Colors.white,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: Color(0xFFDDE7DF)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: Color(0xFF709A84)),
+              ),
               isDense: true,
             ),
             onChanged: (_) => setState(() {}),
@@ -330,13 +348,23 @@ class _TaskDrawerState extends State<TaskDrawer> {
           ),
           _undoBanner(),
           const SizedBox(height: 10),
-          FilledButton(
+          OutlinedButton.icon(
             key: const Key('drawerStartFocus'),
             onPressed: widget.onStart,
-            style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF337259),
-                minimumSize: const Size.fromHeight(48)),
-            child: Text(c.engine.isRunning ? '返回专注' : '开始专注'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF27624D),
+              backgroundColor: const Color(0xFFE8F1E9),
+              side: BorderSide.none,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(13),
+              ),
+            ),
+            icon: Icon(
+              c.engine.isRunning ? Icons.arrow_back_rounded : Icons.play_arrow_rounded,
+              size: 19,
+            ),
+            label: Text(c.engine.isRunning ? '返回专注' : '开始专注'),
           ),
         ],
         ),
