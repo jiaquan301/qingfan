@@ -41,7 +41,10 @@ class DesktopWindowBridge {
       await applyTopmost(controller);
       await windowManager.show();
       await windowManager.setSize(sizeFor(controller.mode, controller.panel));
-      await windowManager.setResizable(false);
+      // window_manager 0.5.x on Linux reverts GTK geometry to the runner's
+      // default when resizable(false) is applied. Keep Linux programmatic
+      // resizing functional; the pinned runner default is patched in CI.
+      if (!Platform.isLinux) await windowManager.setResizable(false);
       await windowManager.focus();
     });
   }
@@ -52,7 +55,7 @@ class DesktopWindowBridge {
     // window-manager dependent and may silently keep the old dimensions.
     await windowManager.setResizable(true);
     await windowManager.setSize(sizeFor(controller.mode, controller.panel));
-    await windowManager.setResizable(false);
+    if (!Platform.isLinux) await windowManager.setResizable(false);
     await applyTopmost(controller);
   }
 
