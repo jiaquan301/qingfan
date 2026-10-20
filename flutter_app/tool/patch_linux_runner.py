@@ -50,7 +50,11 @@ elif "GdkVisual* qingfan_rgba" not in source:
 
 # Alpha is carried through BOTH the GTK visual and FlView backing.
 old_background = 'gdk_rgba_parse(&background_color, "#000000");'
-new_background = 'gdk_rgba_parse(&background_color, "#00000000");'
+new_background = (
+    'gdk_rgba_parse(&background_color, '
+    'gdk_screen_is_composited(qingfan_screen) '
+    '? "#00000000" : "#F8FAF7");'
+)
 if source.count(old_background) == 1:
     source = source.replace(old_background, new_background, 1)
 elif source.count(new_background) != 1:
