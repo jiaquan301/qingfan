@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../application/qingfan_controller.dart';
 import '../domain/focus_engine.dart';
 
 class TaskDrawer extends StatefulWidget {
-  const TaskDrawer({super.key, required this.controller, required this.onClose});
+  const TaskDrawer({
+    super.key, required this.controller, required this.onClose,
+    required this.onStart,
+  });
 
   final QingfanController controller;
   final VoidCallback onClose;
+  final VoidCallback onStart;
 
   @override
   State<TaskDrawer> createState() => _TaskDrawerState();
@@ -68,7 +73,20 @@ class _TaskDrawerState extends State<TaskDrawer> {
         !await _confirmDiscard()) {
       return;
     }
-    c.completeTask(task.id, discardPartial: true);
+    if (c.completeTask(task.id, discardPartial: true)) _undoSnackbar();
+  }
+
+  void _undoSnackbar() {
+    final controller = widget.controller;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      duration: const Duration(seconds: 7),
+      content: Text(controller.undoMessage ?? '任务已更新'),
+      action: SnackBarAction(
+        label: '撤销',
+        onPressed: () => controller.undoTaskChange(),
+      ),
+    ));
   }
 
   void _message(String text) {
@@ -139,116 +157,151 @@ class _TaskDrawerState extends State<TaskDrawer> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: pending.isEmpty
-                ? Center(
-                    child: Text(query.isNotEmpty ? '没有匹配的待办任务' : '还没有待办任务',
-                        style: const TextStyle(color: Color(0xFF81978B))),
-                  )
-                : ReorderableListView.builder(
-                    key: ValueKey(query.isEmpty ? 'all' : 'filtered'),
-                    buildDefaultDragHandles: false,
-                    itemCount: pending.length,
-                    onReorderItem: (oldIndex, newIndex) {
-                      if (query.isNotEmpty) {
-                        _message('请清除搜索后再排序');
-                        return;
-                      }
-                      c.reorderTask(oldIndex, newIndex);
-                    },
-                    itemBuilder: (context, index) {
-                      final task = pending[index];
-                      final active = task.id == c.selectedTaskId;
-                      return Container(
-                        key: ValueKey(task.id),
-                        margin: const EdgeInsets.symmetric(vertical: 2),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? const Color(0xFFE8F3EB)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(13),
-                          border: active
-                              ? const Border(left: BorderSide(
-                                  color: Color(0xFF337259), width: 3))
-                              : null,
+            child: SingleChildScrollView(
+              key: const Key('taskScroll'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (pending.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 30),
+                      child: Center(
+                        child: Text(
+                          query.isNotEmpty ? '没有匹配的待办任务' : '还没有待办任务',
+                          style: const TextStyle(color: Color(0xFF81978B)),
                         ),
-                        child: Row(children: [
-                          Checkbox(
-                            value: task.done,
-                            semanticLabel: '标记任务完成',
-                            onChanged: (_) => _toggleDone(task),
+                      ),
+                    )
+                  else
+                    ReorderableListView.builder(
+                      key: ValueKey(query.isEmpty ? 'all' : 'filtered'),
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      itemCount: pending.length,
+                      onReorderItem: (oldIndex, newIndex) {
+                        if (query.isNotEmpty) {
+                          _message('请清除搜索后再排序');
+                          return;
+                        }
+                        c.reorderTask(oldIndex, newIndex);
+                      },
+                      itemBuilder: (context, index) {
+                        final task = pending[index];
+                        final active = task.id == c.selectedTaskId;
+                        return Container(
+                          key: ValueKey(task.id),
+                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          decoration: BoxDecoration(
+                            color: active
+                                ? const Color(0xFFE8F3EB)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(13),
+                            border: active
+                                ? const Border(
+                                    left: BorderSide(
+                                      color: Color(0xFF337259), width: 3))
+                                : null,
                           ),
-                          Expanded(
-                            child: InkWell(
-                              onTap: () => _select(task),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                child: Text(task.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontWeight: active ? FontWeight.w700 : FontWeight.w400)),
+                          child: Row(children: [
+                            Checkbox(
+                              value: task.done,
+                              semanticLabel: '标记任务完成',
+                              onChanged: (_) => _toggleDone(task),
+                            ),
+                            Expanded(
+                              child: CallbackShortcuts(
+                                bindings: <ShortcutActivator, VoidCallback>{
+                                  const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true):
+                                      () => c.moveTask(task.id, -1),
+                                  const SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
+                                      () => c.moveTask(task.id, 1),
+                                },
+                                child: Focus(
+                                  child: InkWell(
+                                    onTap: () => _select(task),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      child: Text(
+                                        task.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                            fontWeight: active
+                                                ? FontWeight.w700
+                                                : FontWeight.w400),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                          if (active)
-                            const Text('当前', style: TextStyle(
-                                fontSize: 11, color: Color(0xFF337259))),
-                          if (task.pomodoros > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 8),
-                              child: Text('🍅 ${task.pomodoros}',
-                                  style: const TextStyle(fontSize: 11)),
-                            ),
-                          if (query.isEmpty)
-                            ReorderableDragStartListener(
-                              index: index,
-                              child: const Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Icon(Icons.drag_indicator,
-                                    color: Color(0xFF81978B), size: 18),
+                            if (active)
+                              const Text('当前', style: TextStyle(
+                                  fontSize: 11, color: Color(0xFF337259))),
+                            if (task.pomodoros > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Text('🍅 ${task.pomodoros}',
+                                    style: const TextStyle(fontSize: 11)),
                               ),
+                            if (query.isEmpty)
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.drag_indicator,
+                                      color: Color(0xFF81978B), size: 18),
+                                ),
+                              ),
+                            PopupMenuButton<String>(
+                              tooltip: '任务操作',
+                              icon: const Icon(Icons.more_horiz),
+                              onSelected: (action) {
+                                if (action == 'rename') _rename(task);
+                                if (action == 'delete') _delete(task);
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(value: 'rename', child: Text('重命名')),
+                                PopupMenuItem(value: 'delete', child: Text('删除')),
+                              ],
                             ),
-                          PopupMenuButton<String>(
-                            tooltip: '任务操作',
-                            icon: const Icon(Icons.more_horiz),
-                            onSelected: (action) {
-                              if (action == 'rename') _rename(task);
-                              if (action == 'delete') _delete(task);
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'rename', child: Text('重命名')),
-                              PopupMenuItem(value: 'delete', child: Text('删除')),
-                            ],
-                          ),
-                        ]),
-                      );
-                    },
-                  ),
-          ),
-          if (completed.isNotEmpty)
-            ExpansionTile(
-              initiallyExpanded: _completedExpanded,
-              onExpansionChanged: (expanded) {
-                setState(() => _completedExpanded = expanded);
-              },
-              title: Text('已完成（${completed.length}）'),
-              children: completed.take(20).map((task) => CheckboxListTile(
-                dense: true,
-                value: true,
-                title: Text(task.title,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(decoration: TextDecoration.lineThrough)),
-                onChanged: (_) => _toggleDone(task),
-              )).toList(),
+                          ]),
+                        );
+                      },
+                    ),
+                  if (completed.isNotEmpty)
+                    ExpansionTile(
+                      key: const Key('completedSection'),
+                      initiallyExpanded: _completedExpanded || query.isNotEmpty,
+                      onExpansionChanged: (expanded) {
+                        setState(() => _completedExpanded = expanded);
+                      },
+                      title: Text('已完成（${completed.length}）'),
+                      children: completed.map((task) => CheckboxListTile(
+                        dense: true,
+                        value: true,
+                        title: Text(
+                          task.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(decoration: TextDecoration.lineThrough),
+                        ),
+                        onChanged: (_) => _toggleDone(task),
+                      )).toList(),
+                    ),
+                ],
+              ),
             ),
+          ),
           const SizedBox(height: 10),
           FilledButton(
             key: const Key('drawerStartFocus'),
-            onPressed: widget.onClose,
+            onPressed: widget.onStart,
             style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF337259),
                 minimumSize: const Size.fromHeight(48)),
-            child: Text(c.engine.isRunning ? '返回专注' : '返回时钟 · 点击表盘开始'),
+            child: Text(c.engine.isRunning ? '返回专注' : '开始专注'),
           ),
         ],
       ),
@@ -286,6 +339,6 @@ class _TaskDrawerState extends State<TaskDrawer> {
         !await _confirmDiscard()) {
       return;
     }
-    c.deleteTask(task.id, discardPartial: true);
+    if (c.deleteTask(task.id, discardPartial: true)) _undoSnackbar();
   }
 }
