@@ -90,6 +90,22 @@ void main() {
     b.dispose();
   });
 
+  test('Corrupt local JSON is quarantined rather than silently erased', () async {
+    final directory = await Directory.systemTemp.createTemp('qingfan-corrupt-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = LocalStore(testDirectory: directory);
+    final source = File('${directory.path}${Platform.pathSeparator}qingfan_v2.json');
+    await source.writeAsString('{broken json');
+    expect(await store.load(), isNull);
+    expect(await source.exists(), isFalse);
+    final quarantined = directory
+        .listSync()
+        .whereType<File>()
+        .where((file) => file.path.contains('.broken-'));
+    expect(quarantined.length, 1);
+    expect(await quarantined.single.readAsString(), '{broken json');
+  });
+
   testWidgets('5, 20 and 50 tasks keep the primary action fixed and reachable',
       (tester) async {
     for (final count in [5, 20, 50]) {
