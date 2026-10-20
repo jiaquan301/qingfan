@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+
+import 'package:window_manager/window_manager.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,14 +12,70 @@ import 'infrastructure/window_bridge.dart';
 import 'presentation/crystal_clock.dart';
 import 'presentation/task_drawer.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final controller = QingfanController(store: LocalStore());
   await controller.load();
   final bridge = DesktopWindowBridge();
   await bridge.prepare();
+  // A new app session opens in the full clock, irrespective of last size.
+  // Only ONE GTK/native runner is ever created by this Flutter process.
+  controller.setMode(ClockMode.full);
   runApp(QingfanApp(controller: controller, bridge: bridge));
   await bridge.showInitial(controller);
+  if (args.contains('--native-smoke')) {
+    await _nativeSmoke(controller, bridge);
+  }
+}
+
+/// Inspects the actual running desktop window, not just its Flutter widgets.
+/// Used under Xvfb + a real X11 window manager in GitHub Actions.
+Future<void> _nativeSmoke(
+  QingfanController controller, DesktopWindowBridge bridge,
+) async {
+  Future<void> check(String name, Size requested) async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    final measured = await windowManager.getSize();
+    if ((requested.width - measured.width).abs() > 4 ||
+        (requested.height - measured.height).abs() > 4) {
+      throw StateError('$name size expected $requested but was $measured');
+    }
+    stdout.writeln('NATIVE_SMOKE_SIZE $name: $measured');
+  }
+
+  try {
+    await check('full', DesktopWindowBridge.fullSize);
+    controller.setMode(ClockMode.mini);
+    await bridge.setSurface(controller);
+    await check('mini', DesktopWindowBridge.miniSize);
+    controller.setMode(ClockMode.full);
+    await bridge.setSurface(controller);
+    await check('full_return', DesktopWindowBridge.fullSize);
+    controller.openPanel(OpenPanel.tasks);
+    await bridge.setSurface(controller);
+    await check('tasks', DesktopWindowBridge.panelSize);
+    controller.closePanel();
+    await bridge.setSurface(controller);
+    await check('close_tasks', DesktopWindowBridge.fullSize);
+    controller.setAlwaysOnTop(true);
+    await bridge.applyTopmost(controller);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    final reportedTop = await windowManager.isAlwaysOnTop();
+    stdout.writeln('NATIVE_SMOKE_TOPMOST reported=$reportedTop');
+    if (!bridge.likelyWayland && !reportedTop) {
+      throw StateError('X11 or desktop runner refused always-on-top');
+    }
+    controller.setAlwaysOnTop(false);
+    await bridge.applyTopmost(controller);
+    stdout.writeln('NATIVE_SMOKE_PASS single-runner full mini panel topmost');
+    await controller.flush();
+    await bridge.close();
+    exit(0);
+  } catch (error, trace) {
+    stderr.writeln('NATIVE_SMOKE_FAIL: $error\n$trace');
+    await bridge.close();
+    exit(1);
+  }
 }
 
 class QingfanApp extends StatefulWidget {
