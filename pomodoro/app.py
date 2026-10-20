@@ -201,8 +201,8 @@ class Window(Gtk.ApplicationWindow):
         # Task management is a separate, useful workspace. Only the list scrolls;
         # the title, add field, undo feedback and primary action remain visible.
         self.task_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.task_panel.set_vexpand(True)
-        base.pack_start(self.task_panel, True, True, 0)
+        self.task_panel.set_vexpand(False)
+        base.pack_start(self.task_panel, False, False, 0)
         separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         self.task_panel.pack_start(separator, False, False, 0)
 
@@ -211,8 +211,8 @@ class Window(Gtk.ApplicationWindow):
         inside.set_margin_end(18)
         inside.set_margin_top(14)
         inside.set_margin_bottom(14)
-        inside.set_vexpand(True)
-        self.task_panel.pack_start(inside, True, True, 0)
+        inside.set_vexpand(False)
+        self.task_panel.pack_start(inside, False, False, 0)
 
         section = Gtk.Box(spacing=8)
         inside.pack_start(section, False, False, 0)
@@ -370,7 +370,7 @@ class Window(Gtk.ApplicationWindow):
     def _size_task_scroller(self, window_height):
         # Account for the header bar, fixed title/add/footer controls and a
         # safety margin for client-side decoration allocation.
-        target = max(100, min(350, int(window_height) - 270))
+        target = max(80, min(350, int(window_height) - 290))
         if self.scroller.get_size_request()[1] != target:
             self.scroller.set_size_request(-1, target)
 
