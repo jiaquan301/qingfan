@@ -1,5 +1,8 @@
 # 青番 · Qingfan
 
+> **V2 产品及跨平台技术迁移中**：正式定义见 [V2 产品需求与视觉交互规范](docs/v2-product-prd.md) 和 [V2 技术架构与研发验收标准](docs/v2-engineering-acceptance.md)。Flutter 候选工程位于 [flutter_app/](flutter_app/)，需通过 Flutter 原生构建和实机验收后才能替换现有 GTK3 安装入口。当前可用版本仍是下文的 GTK3 V1.1。
+
+
 **轻量 Ubuntu 桌面专注钟。一次只专注一件事。**
 
 青番把一个完整的番茄钟浓缩成桌面悬浮时钟：平时只看时间，需要时展开任务面板。没有账号、联网、云同步、报表或复杂项目管理；本地 Python + GTK 3 实现。
