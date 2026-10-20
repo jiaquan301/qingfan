@@ -272,7 +272,10 @@ class _TaskDrawerState extends State<TaskDrawer> {
                     ),
                   if (completed.isNotEmpty)
                     ExpansionTile(
-                      key: const Key('completedSection'),
+                      // Searching must reveal matching completed tasks even if
+                      // this section was collapsed before typing. A changing
+                      // key remounts ExpansionTile so initial expansion applies.
+                      key: ValueKey('completedSection-${query.isEmpty ? 'all' : 'search'}'),
                       initiallyExpanded: _completedExpanded || query.isNotEmpty,
                       onExpansionChanged: (expanded) {
                         setState(() => _completedExpanded = expanded);
