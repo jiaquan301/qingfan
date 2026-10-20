@@ -1,4 +1,4 @@
-# Qingfan V2 Windows — unsigned candidate installer
+; Qingfan V2 Windows — unsigned candidate installer
 #define AppName "Qingfan"
 #define AppVersion "2.0.0-dev1"
 
