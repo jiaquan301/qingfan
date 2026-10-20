@@ -40,6 +40,7 @@ jobs:
         working-directory: flutter_app
         run: |
           flutter create --no-pub --project-name qingfan --platforms=linux,windows,macos .
+          python3 tool/patch_linux_runner.py
           flutter pub get
       - name: Static analysis
         working-directory: flutter_app
