@@ -67,8 +67,7 @@ Future<void> _nativeSmoke(
       if (match.isEmpty) throw StateError('No Qingfan X11 window to capture');
       final fields = match.trim().split(RegExp(r'\s+'));
       if (fields.length < 6) throw StateError('Invalid wmctrl geometry: $match');
-      final x = int.parse(fields[2]);
-      final y = int.parse(fields[3]);
+      final windowId = fields[0];
       final width = int.parse(fields[4]);
       final height = int.parse(fields[5]);
       if (width < 80 || height < 80) {
@@ -76,16 +75,21 @@ Future<void> _nativeSmoke(
       }
       await Directory('native-shots').create(recursive: true);
       final output = 'native-shots/$name.png';
-      // An ARGB GTK surface without X11 compositing can read back as entirely
-      // transparent. Capture the composited ROOT framebuffer and crop to the
-      // native window rectangle to inspect what a desktop user actually sees.
+      // Capture the actual GTK window drawable by XID, not the Xvfb root
+      // framebuffer. The root image can be uniform black when the headless
+      // compositor has not copied child surfaces into the root pixmap.
       final screenshot = await Process.run(
-        'import', [
-          '-window', 'root', '-crop',
-          '${width}x$height+$x+$y', '-depth', '8', output,
-        ]);
+        'import', ['-window', windowId, '-depth', '8', output],
+      );
       if (screenshot.exitCode != 0 || !File(output).existsSync()) {
         throw StateError('Native screenshot $name failed: ${screenshot.stderr}');
+      }
+      final dimensions = await Process.run('identify', [
+        '-format', '%w %h', output,
+      ]);
+      if (dimensions.exitCode != 0 ||
+          dimensions.stdout.toString().trim() != '$width $height') {
+        throw StateError('Native screenshot $name has unexpected dimensions: ${dimensions.stdout}');
       }
       final bytes = await File(output).length();
       stdout.writeln('NATIVE_SCREENSHOT $name $output $bytes bytes');
