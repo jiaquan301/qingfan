@@ -7,13 +7,19 @@ test -x "$app" || { echo "Release executable not found: $app" >&2; exit 1; }
 command -v wmctrl >/dev/null
 openbox --sm-disable >/tmp/qingfan-openbox.log 2>&1 &
 wm_pid=$!
+picom --backend xrender --no-vsync --no-fading-openclose >/tmp/qingfan-picom.log 2>&1 &
+compositor_pid=$!
 watch_pid=""
 cleanup() {
   [[ -n "$watch_pid" ]] && kill "$watch_pid" >/dev/null 2>&1 || :
+  kill "$compositor_pid" >/dev/null 2>&1 || :
   kill "$wm_pid" >/dev/null 2>&1 || :
 }
 trap cleanup EXIT
 sleep 0.7
+kill -0 "$compositor_pid" >/dev/null 2>&1 ||
+  { cat /tmp/qingfan-picom.log >&2; echo 'X11_COMPOSITOR_UNAVAILABLE' >&2; exit 1; }
+echo 'X11_COMPOSITOR_READY'
 seen_file="$(mktemp)"
 trap 'rm -f "$seen_file"; cleanup' EXIT
 (
