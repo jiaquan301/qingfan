@@ -320,6 +320,14 @@ class QingfanController extends ChangeNotifier {
     _scheduleSave();
   }
 
+  void moveTask(String id, int delta) {
+    final current = pending.indexWhere((task) => task.id == id);
+    if (current < 0) return;
+    final destination = current + delta;
+    if (destination < 0 || destination >= pending.length) return;
+    reorderTask(current, destination);
+  }
+
   void renameTask(String id, String title) {
     final clean = title.trim();
     if (clean.isEmpty) return;
