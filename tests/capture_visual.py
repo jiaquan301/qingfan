@@ -26,7 +26,8 @@ def drain():
 
 
 def capture(window, name):
-    expected = {'focus': (326, 356), 'mini': (100, 100)}.get(name)
+    expected = {'focus': (326, 356), 'mini': (100, 100),
+                'tasks': (400, 520), 'long_tasks': (400, 520)}.get(name)
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         drain()
@@ -100,6 +101,10 @@ def assert_task_footer_visible(window):
 
 
 def main():
+    scenes = {'focus', 'mini', 'tasks', 'long_tasks'}
+    if len(sys.argv) != 2 or sys.argv[1] not in scenes:
+        raise SystemExit('Usage: capture_visual.py focus|mini|tasks|long_tasks')
+    scene = sys.argv[1]
     app = Application()
     if not app.register(None):
         raise RuntimeError('Could not register GTK application')
@@ -107,44 +112,39 @@ def main():
     w._set_mode(False)
     w.entry.set_text('完成产品设计评审')
     w.add_task()
-    w._set_mode(True)
-    drain()
-    capture(w.orb_window, 'focus')
-    w.orb_window.set_mini(True)
-    drain()
-    capture(w.orb_window, 'mini')
-    w.orb_window.open_tasks()
-    drain()
-    print('TASK_PRIMARY', {
-        'current_id': w.model.current_id,
-        'tasks': len(w.model.pending_tasks),
-        'sensitive': w.task_primary_button.get_sensitive(),
-        'label': w.task_primary_button.get_label(),
-    }, flush=True)
-    if w.model.current_id is None or not w.task_primary_button.get_sensitive():
-        raise RuntimeError('Selected task must enable primary focus action')
-    print('TASK_BUTTON_STATE', {
-        'effective_sensitive': w.task_primary_button.is_sensitive(),
-        'state_flags': int(w.task_primary_button.get_state_flags()),
-    }, flush=True)
-    w.task_primary_button.queue_draw()
-    drain()
-    time.sleep(0.15)
-    drain()
-    capture(w, 'tasks')
-    assert_task_footer_visible(w)
-
-    # Keep a real 50-task fixture in visual evidence: the manager must remain
-    # the same size and expose a working internal scrollbar.
-    for index in range(49):
-        w.model.add(f'长清单任务 {index + 2:02d}')
-    w.refresh_tasks()
-    drain()
-    adjustment = w.scroller.get_vadjustment()
-    if adjustment.get_upper() <= adjustment.get_page_size():
-        raise RuntimeError('50-task list did not activate its internal scrollbar')
-    capture(w, 'long_tasks')
-    assert_task_footer_visible(w)
+    if scene in ('focus', 'mini'):
+        w._set_mode(True)
+        if scene == 'mini':
+            w.orb_window.set_mini(True)
+        drain()
+        capture(w.orb_window, scene)
+    else:
+        if scene == 'long_tasks':
+            # Build the long list before exposing the manager window. This
+            # avoids repeatedly destroying 50 live GTK rows during screenshot
+            # acquisition and makes each scene independently reproducible.
+            for index in range(49):
+                w.model.add(f'长清单任务 {index + 2:02d}')
+            w.refresh_tasks()
+        drain()
+        print('TASK_PRIMARY', {
+            'current_id': w.model.current_id,
+            'tasks': len(w.model.pending_tasks),
+            'sensitive': w.task_primary_button.get_sensitive(),
+            'label': w.task_primary_button.get_label(),
+        }, flush=True)
+        if w.model.current_id is None or not w.task_primary_button.get_sensitive():
+            raise RuntimeError('Selected task must enable primary focus action')
+        w.task_primary_button.queue_draw()
+        drain()
+        time.sleep(0.15)
+        drain()
+        if scene == 'long_tasks':
+            adjustment = w.scroller.get_vadjustment()
+            if adjustment.get_upper() <= adjustment.get_page_size():
+                raise RuntimeError('50-task list did not activate its internal scrollbar')
+        capture(w, scene)
+        assert_task_footer_visible(w)
     w.destroy()
 
 
