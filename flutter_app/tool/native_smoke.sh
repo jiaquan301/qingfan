@@ -160,6 +160,14 @@ if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
       { echo "NATIVE_ALPHA_CORNER_OPAQUE $scene red=$corner" >&2; exit 1; }
   done
   echo 'NATIVE_ROUND_WINDOW_ALPHA_PASS'
+  # The expanded task workspace must have an intentionally pale surface.
+  # A transparent Flutter Scaffold inside a 768x540 GTK window produced
+  # a solid black rectangle on some Linux compositors.
+  tasks_corner="$(convert "native-shots/tasks-root.png" -format '%[fx:int(255*u.p{15,15}.r)]' info:)"
+  echo "NATIVE_TASK_WORKSPACE_CORNER red=$tasks_corner"
+  [[ "$tasks_corner" -gt 185 ]] ||
+    { echo "NATIVE_TASK_WORKSPACE_BLACK_BACKGROUND red=$tasks_corner" >&2; exit 1; }
+  echo 'NATIVE_TASK_WORKSPACE_SURFACE_PASS'
 fi
 max_count="$(sort -nr "$seen_file" | head -1)"
 echo "NATIVE_SMOKE_MAX_WINDOWS=$max_count"
