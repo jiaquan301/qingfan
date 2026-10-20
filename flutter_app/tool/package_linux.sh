@@ -20,7 +20,7 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: Qingfan developers <noreply@github.com>
-Depends: libc6, libstdc++6, libgtk-3-0, libglib2.0-0
+Depends: libc6, libstdc++6, libgtk-3-0, libglib2.0-0, liblzma5, fonts-noto-cjk
 Description: Qingfan desktop Pomodoro focus clock (Flutter V2 candidate)
  Local-first, single-window focus timer.
 EOF
