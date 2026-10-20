@@ -56,6 +56,14 @@ jobs:
       - name: Debian installer candidate
         working-directory: flutter_app
         run: bash tool/package_linux.sh
+      - name: Verify Debian package install and uninstall
+        working-directory: flutter_app
+        run: |
+          sudo apt-get install -y ./dist/*.deb
+          test -x /usr/lib/qingfan/qingfan
+          test -f /usr/share/applications/qingfan.desktop
+          sudo apt-get remove -y qingfan
+          test ! -e /usr/lib/qingfan/qingfan
       - name: Save Linux deb and native evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,7 +104,22 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/qingfan-v2-windows-x64-unsigned.zip" -Force
-      - name: Windows candidate artifact
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: choco install innosetup --version=6.4.3 -y --no-progress
+      - name: Windows installer (unsigned test candidate)
+        working-directory: flutter_app
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" tool/qingfan_windows.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Windows portable and installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingfan-v2-windows-installer
+          path: flutter_app/dist/*.exe
+          if-no-files-found: error
+      - name: Windows portable artifact
         uses: actions/upload-artifact@v4
         with:
           name: qingfan-v2-windows-portable
@@ -132,9 +155,15 @@ jobs:
         run: |
           mkdir -p dist
           ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/qingfan.app dist/qingfan-v2-macos-unsigned.zip
-      - name: macOS candidate artifact
+      - name: macOS unsigned DMG for testing
+        working-directory: flutter_app
+        run: |
+          hdiutil create -volname Qingfan -srcfolder build/macos/Build/Products/Release/qingfan.app -ov -format UDZO dist/qingfan-v2-macos-unsigned.dmg
+      - name: macOS candidate artifacts
         uses: actions/upload-artifact@v4
         with:
           name: qingfan-v2-macos-app-unsigned
-          path: flutter_app/dist/*.zip
+          path: |
+            flutter_app/dist/*.zip
+            flutter_app/dist/*.dmg
           if-no-files-found: error
