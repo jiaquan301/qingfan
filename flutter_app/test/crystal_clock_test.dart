@@ -6,7 +6,6 @@ import 'package:qingfan/presentation/crystal_clock.dart';
 void main() {
   testWidgets('Cold UI opens clock and can start without task', (tester) async {
     final controller = QingfanController();
-    addTearDown(controller.dispose);
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: SizedBox(
@@ -31,13 +30,13 @@ void main() {
     expect(controller.engine.isRunning, isTrue);
     await tester.tap(find.byKey(const Key('clockCenter')));
     expect(controller.engine.isRunning, isFalse);
+    controller.dispose();
   });
 
   testWidgets('Mini dial contains no big task or start button',
       (tester) async {
     final controller = QingfanController();
     controller.setMode(ClockMode.mini);
-    addTearDown(controller.dispose);
     await tester.pumpWidget(MaterialApp(
       home: SizedBox(
         width: 104,
@@ -56,5 +55,6 @@ void main() {
     expect(find.text('25:00'), findsOneWidget);
     expect(find.text('自由专注'), findsNothing);
     expect(find.byKey(const Key('clockCenter')), findsOneWidget);
+    controller.dispose();
   });
 }
