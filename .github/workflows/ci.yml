@@ -23,12 +23,14 @@ jobs:
         env:
           GSETTINGS_BACKEND: memory
           QINGFAN_REQUIRE_GUI: "1"
+          G_DEBUG: fatal-criticals
           PYTHONDONTWRITEBYTECODE: "1"
         run: dbus-run-session -- xvfb-run -a ./verify.sh
 
       - name: Capture full, mini and task GTK surfaces
         env:
           GSETTINGS_BACKEND: memory
+          G_DEBUG: fatal-criticals
           PYTHONDONTWRITEBYTECODE: "1"
         run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/capture_visual.py
       - name: Save visual regression evidence
