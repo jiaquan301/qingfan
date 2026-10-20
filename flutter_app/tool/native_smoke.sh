@@ -24,15 +24,29 @@ trap 'rm -f "$seen_file"; cleanup' EXIT
   done
 ) &
 watch_pid=$!
+# Launch a second instance while the main native window is alive. It must
+# detect the held OS lock, return immediately, and never create another view.
+(
+  sleep 1.5
+  timeout 8s "$app" >native-second-instance.log 2>&1
+) &
+second_pid=$!
 set +e
 QINGFAN_NATIVE_SMOKE=1 timeout 35s "$app" >native-smoke.log 2>&1
 status=$?
+wait "$second_pid"
+second_status=$?
 set -e
 cat native-smoke.log
 if [[ "$status" -ne 0 ]]; then
   echo "NATIVE_SMOKE_FAILED exit=$status" >&2
   exit "$status"
 fi
+[[ "$second_status" -eq 0 ]] ||
+  { cat native-second-instance.log >&2; echo "SECOND_INSTANCE_FAILED" >&2; exit 1; }
+grep -q 'QINGFAN_ALREADY_RUNNING' native-second-instance.log ||
+  { cat native-second-instance.log >&2; echo "SECOND_INSTANCE_LOCK_FAILED" >&2; exit 1; }
+echo 'NATIVE_SINGLE_INSTANCE_PASS'
 grep -q 'NATIVE_SMOKE_PASS' native-smoke.log
 for scene in full mini full_return tasks close_tasks; do
   grep -q "NATIVE_SMOKE_SIZE $scene:" native-smoke.log ||
