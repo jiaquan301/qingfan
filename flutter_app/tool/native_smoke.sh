@@ -32,17 +32,32 @@ trap 'rm -f "$seen_file"; cleanup' EXIT
 watch_pid=$!
 # Launch a second instance while the main native window is alive. It must
 # detect the held OS lock, return immediately, and never create another view.
-(
-  sleep 1.5
-  timeout 8s "$app" >native-second-instance.log 2>&1
-) &
-second_pid=$!
+QINGFAN_NATIVE_SMOKE=1 timeout 35s "$app" >native-smoke.log 2>&1 &
+main_pid=$!
+# Wait for the primary window to become real and publish a geometry result
+# BEFORE attempting a second start. Racing both GTK runners at boot would
+# only test process scheduling and can reverse which process owns the lock.
+ready=0
+for _ in $(seq 1 100); do
+  if grep -q 'NATIVE_SMOKE_OBSERVED full' native-smoke.log; then
+    ready=1
+    break
+  fi
+  if ! kill -0 "$main_pid" >/dev/null 2>&1; then break; fi
+  sleep .10
+done
+if [[ "$ready" != "1" ]]; then
+  cat native-smoke.log
+  echo "NATIVE_PRIMARY_STARTUP_FAILED" >&2
+  exit 1
+fi
 set +e
-QINGFAN_NATIVE_SMOKE=1 timeout 35s "$app" >native-smoke.log 2>&1
-status=$?
-wait "$second_pid"
+timeout 15s "$app" >native-second-instance.log 2>&1
 second_status=$?
+wait "$main_pid"
+status=$?
 set -e
+echo "NATIVE_SECOND_INSTANCE_EXIT=$second_status"
 cat native-smoke.log
 if [[ "$status" -ne 0 ]]; then
   echo "NATIVE_SMOKE_FAILED exit=$status" >&2
