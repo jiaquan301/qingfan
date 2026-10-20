@@ -8,7 +8,7 @@ auditable via an explicit, assertion-checked, version-pinned patch.
 """
 from pathlib import Path
 
-runner = Path(__file__).resolve().parents[1] / "linux" / "my_application.cc"
+runner = Path(__file__).resolve().parents[1] / "linux" / "runner" / "my_application.cc"
 source = runner.read_text(encoding="utf-8")
 
 old_default = "1280, 720"
