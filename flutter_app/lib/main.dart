@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'application/qingfan_controller.dart';
+import 'infrastructure/instance_guard.dart';
 import 'infrastructure/local_store.dart';
 import 'infrastructure/window_bridge.dart';
 import 'presentation/crystal_clock.dart';
@@ -14,6 +15,20 @@ import 'presentation/task_drawer.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  final instanceGuard = InstanceGuard();
+  if (!await instanceGuard.acquire()) {
+    stdout.writeln('QINGFAN_ALREADY_RUNNING');
+    if (Platform.isLinux &&
+        Platform.environment['XDG_SESSION_TYPE']?.toLowerCase() != 'wayland') {
+      try {
+        await Process.run('wmctrl', ['-a', '青番'])
+            .timeout(const Duration(milliseconds: 700));
+      } catch (_) {
+        // Raising an existing X11 window is optional; single instance isn't.
+      }
+    }
+    exit(0);
+  }
   final controller = QingfanController(store: LocalStore());
   await controller.load();
   final bridge = DesktopWindowBridge();
