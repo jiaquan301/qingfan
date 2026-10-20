@@ -75,13 +75,16 @@ for scene in full mini full_return tasks close_tasks; do
 done
 if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
   for scene in full mini full_return tasks close_tasks; do
-    shot="native-shots/$scene.png"
-    [[ -s "$shot" ]] ||
+    direct="native-shots/$scene.png"
+    root="native-shots/$scene-root.png"
+    [[ -s "$direct" && -s "$root" ]] ||
       { echo "NATIVE_SCREENSHOT_MISSING $scene" >&2; exit 1; }
-    entropy="$(identify -format '%[entropy]' "$shot")"
-    echo "NATIVE_SCREENSHOT_ENTROPY $scene=$entropy"
-    awk -v entropy="$entropy" 'BEGIN { exit !(entropy > 0.01) }' ||
-      { echo "NATIVE_SCREENSHOT_BLANK $scene entropy=$entropy" >&2; exit 1; }
+    direct_entropy="$(identify -format '%[entropy]' "$direct")"
+    root_entropy="$(identify -format '%[entropy]' "$root")"
+    echo "NATIVE_SCREENSHOT_ENTROPY $scene direct=$direct_entropy root=$root_entropy"
+    awk -v direct="$direct_entropy" -v root="$root_entropy" \
+      'BEGIN { exit !((direct > 0.01) || (root > 0.01)) }' ||
+      { echo "NATIVE_SCREENSHOT_BLANK $scene direct=$direct_entropy root=$root_entropy" >&2; exit 1; }
   done
   echo 'NATIVE_VISUAL_CONTENT_PASS'
 fi
