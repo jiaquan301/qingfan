@@ -7,7 +7,6 @@ void main() {
   testWidgets('Product entry is a single focus dial, without required tasks',
       (tester) async {
     final controller = QingfanController();
-    addTearDown(controller.dispose);
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: SizedBox(
@@ -29,5 +28,6 @@ void main() {
     expect(find.text('自由专注'), findsOneWidget);
     await tester.tap(find.byKey(const Key('clockCenter')));
     expect(controller.engine.isRunning, isTrue);
+    controller.dispose();
   });
 }
