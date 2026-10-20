@@ -78,30 +78,50 @@ Future<void> _nativeSmoke(
       // Capture the actual GTK window drawable by XID, not the Xvfb root
       // framebuffer. The root image can be uniform black when the headless
       // compositor has not copied child surfaces into the root pixmap.
-      final screenshot = await Process.run(
-        'import', ['-window', windowId, '-depth', '8', output],
-      );
-      if (screenshot.exitCode != 0 || !File(output).existsSync()) {
-        throw StateError('Native screenshot $name failed: ${screenshot.stderr}');
+      final rootOutput = 'native-shots/$name-root.png';
+      double directEntropy = 0;
+      double rootEntropy = 0;
+      // Xvfb + software GTK can expose a correctly sized window before the
+      // first Flutter frame has reached the drawable. Poll actual pixels,
+      // with a hard timeout, instead of trusting a fixed sleep.
+      for (var attempt = 0; attempt < 20; attempt++) {
+        final screenshot = await Process.run(
+          'import', ['-window', windowId, '-depth', '8', output],
+        );
+        if (screenshot.exitCode != 0 || !File(output).existsSync()) {
+          throw StateError('Native screenshot $name failed: ${screenshot.stderr}');
+        }
+        final dimensions = await Process.run('identify', [
+          '-format', '%w %h', output,
+        ]);
+        if (dimensions.exitCode != 0 ||
+            dimensions.stdout.toString().trim() != '$width $height') {
+          throw StateError('Native screenshot $name has unexpected dimensions: ${dimensions.stdout}');
+        }
+        final rootCapture = await Process.run('import', [
+          '-window', 'root', '-crop',
+          '${width}x$height+${int.parse(fields[2])}+${int.parse(fields[3])}',
+          '-depth', '8', rootOutput,
+        ]);
+        if (rootCapture.exitCode != 0 || !File(rootOutput).existsSync()) {
+          throw StateError('Native root screenshot $name failed: ${rootCapture.stderr}');
+        }
+        final direct = await Process.run('identify', [
+          '-format', '%[entropy]', output,
+        ]);
+        final root = await Process.run('identify', [
+          '-format', '%[entropy]', rootOutput,
+        ]);
+        directEntropy = double.tryParse(direct.stdout.toString().trim()) ?? 0;
+        rootEntropy = double.tryParse(root.stdout.toString().trim()) ?? 0;
+        if (directEntropy > 0.01 || rootEntropy > 0.01) break;
+        await Future<void>.delayed(const Duration(milliseconds: 250));
       }
-      final dimensions = await Process.run('identify', [
-        '-format', '%w %h', output,
-      ]);
-      if (dimensions.exitCode != 0 ||
-          dimensions.stdout.toString().trim() != '$width $height') {
-        throw StateError('Native screenshot $name has unexpected dimensions: ${dimensions.stdout}');
+      if (directEntropy <= 0.01 && rootEntropy <= 0.01) {
+        throw StateError('Native screenshot $name stayed blank after 5 seconds');
       }
       final bytes = await File(output).length();
-      final rootOutput = 'native-shots/$name-root.png';
-      final rootCapture = await Process.run('import', [
-        '-window', 'root', '-crop',
-        '${width}x$height+${int.parse(fields[2])}+${int.parse(fields[3])}',
-        '-depth', '8', rootOutput,
-      ]);
-      if (rootCapture.exitCode != 0 || !File(rootOutput).existsSync()) {
-        throw StateError('Native root screenshot $name failed: ${rootCapture.stderr}');
-      }
-      stdout.writeln('NATIVE_SCREENSHOT $name direct=$bytes bytes root=${await File(rootOutput).length()} bytes');
+      stdout.writeln('NATIVE_SCREENSHOT $name direct=$bytes bytes entropy=$directEntropy rootEntropy=$rootEntropy rootBytes=${await File(rootOutput).length()}');
     }
   }
 
