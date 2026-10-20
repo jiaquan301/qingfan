@@ -53,6 +53,11 @@ class _QingfanAppState extends State<QingfanApp> {
     _surface(() => c.openPanel(OpenPanel.tasks));
   }
 
+  void _startFromTasks() {
+    if (!c.engine.isRunning) c.toggleFocus();
+    _closePanel();
+  }
+
   void _showSettings() {
     _surface(() => c.openPanel(OpenPanel.settings));
   }
@@ -145,6 +150,7 @@ class _QingfanAppState extends State<QingfanApp> {
                                 ? TaskDrawer(
                                     controller: c,
                                     onClose: _closePanel,
+                                    onStart: _startFromTasks,
                                   )
                                 : _SettingsPane(
                                     controller: c,
