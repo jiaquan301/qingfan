@@ -77,7 +77,13 @@ move_window_by_pointer() {
   read -r x y w h < <(awk '{print $3, $4, $5, $6}' <<< "$geometry")
   # Ring top contains no click button or timer centre in either geometry.
   target_x=$((x + w / 2))
-  target_y=$((y + 24))
+  # Full dial is inset ~26px from the window top; position INSIDE the
+  # actual painted ring, not the transparent outside margin.
+  if [[ "$scene" == "full" ]]; then
+    target_y=$((y + 54))
+  else
+    target_y=$((y + 18))
+  fi
   xdotool mousemove --sync "$target_x" "$target_y"
   xdotool mousedown 1
   sleep .15
