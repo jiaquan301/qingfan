@@ -116,6 +116,30 @@ class GuiTests(unittest.TestCase):
         self.assertEqual(self.window.model.current_id, tid)
         self.assertFalse(self.window.model.running())
 
+    def test_undo_delete_preserves_subsequent_new_task(self):
+        ids = [task['id'] for task in self.window.model.pending_tasks]
+        self.window.remove_task(ids[1])
+        self.window.entry.set_text('删除后添加的新任务')
+        self.window.add_task()
+        added = self.window.model.pending_tasks[-1]['id']
+        self.window.undo_delete()
+        self.assertEqual([task['id'] for task in self.window.model.pending_tasks],
+                         ids + [added])
+        self.assertEqual(self.window.model.current_id, ids[0])
+
+    def test_undo_completion_preserves_other_task_rename_and_count(self):
+        tasks = self.window.model.pending_tasks
+        chosen = tasks[1]['id']
+        other = tasks[2]['id']
+        self.window.complete_task(chosen, True)
+        self.window.model.rename(other, '另外一项任务的新名称')
+        next(task for task in self.window.model.tasks if task['id'] == other)['pomodoros'] = 3
+        self.window.undo_delete()
+        self.assertEqual(len(self.window.model.pending_tasks), 3)
+        self.assertEqual(next(task for task in self.window.model.tasks if task['id'] == other)['title'],
+                         '另外一项任务的新名称')
+        self.assertEqual(next(task for task in self.window.model.tasks if task['id'] == other)['pomodoros'], 3)
+
     def test_refresh_destroys_old_rows(self):
         old = self.window.rows_box.get_children()[0]
         destroyed = []
