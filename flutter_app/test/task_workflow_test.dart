@@ -109,6 +109,32 @@ void main() {
     expect(await quarantined.single.readAsString(), '{broken json');
   });
 
+  testWidgets('Search expands matching completed tasks while normally collapsed',
+      (tester) async {
+    final c = QingfanController();
+    c.addTask('待办工作');
+    c.addTask('已经完成甲');
+    expect(c.completeTask(c.pending.last.id), true);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 450,
+          height: 540,
+          child: TaskDrawer(
+            controller: c,
+            onClose: () {},
+            onStart: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.enterText(find.byKey(const Key('taskSearch')), '完成甲');
+    await tester.pumpAndSettle();
+    expect(find.text('已经完成甲'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
   testWidgets('Space typed inside task input must not toggle focus', (tester) async {
     final c = QingfanController();
     c.openPanel(OpenPanel.tasks);
