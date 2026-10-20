@@ -20,6 +20,9 @@ sleep 0.7
 kill -0 "$compositor_pid" >/dev/null 2>&1 ||
   { cat /tmp/qingfan-picom.log >&2; echo 'X11_COMPOSITOR_UNAVAILABLE' >&2; exit 1; }
 echo 'X11_COMPOSITOR_READY'
+# Dark wallpaper exposes opaque white square backgrounds in otherwise round
+# glass clocks. This makes transparency objectively testable.
+xsetroot -solid '#34203B'
 seen_file="$(mktemp)"
 trap 'rm -f "$seen_file"; cleanup' EXIT
 (
@@ -87,6 +90,16 @@ if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
       { echo "NATIVE_SCREENSHOT_BLANK $scene direct=$direct_entropy root=$root_entropy" >&2; exit 1; }
   done
   echo 'NATIVE_VISUAL_CONTENT_PASS'
+  # Root framebuffer captures the composited display: at the round clock's
+  # top-left corner we must see the dark desktop, not an opaque application
+  # rectangle. Require both full and mini clocks to pass the alpha test.
+  for scene in full mini; do
+    corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{2,2}.r)]' info:)"
+    echo "NATIVE_ALPHA_CORNER $scene red=$corner"
+    [[ "$corner" -lt 125 ]] ||
+      { echo "NATIVE_ALPHA_CORNER_OPAQUE $scene red=$corner" >&2; exit 1; }
+  done
+  echo 'NATIVE_ROUND_WINDOW_ALPHA_PASS'
 fi
 max_count="$(sort -nr "$seen_file" | head -1)"
 echo "NATIVE_SMOKE_MAX_WINDOWS=$max_count"
