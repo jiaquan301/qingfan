@@ -1,0 +1,119 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:qingfan/application/qingfan_controller.dart';
+import 'package:qingfan/infrastructure/local_store.dart';
+import 'package:qingfan/presentation/task_drawer.dart';
+
+void main() {
+  test('Complete, undo, restore and delete are distinct from selecting', () {
+    final c = QingfanController();
+    addTearDown(c.dispose);
+    c.addTask('A');
+    c.addTask('B');
+    final a = c.pending.first.id;
+    final b = c.pending.last.id;
+    expect(c.selectedTaskId, a);
+    expect(c.completeTask(b), true);
+    expect(c.selectedTaskId, a);
+    expect(c.pending.length, 1);
+    expect(c.completed.single.id, b);
+    expect(c.undoTaskChange(), true);
+    expect(c.pending.length, 2);
+    expect(c.completed, isEmpty);
+    expect(c.selectTask(b), true);
+    expect(c.selectedTaskId, b);
+    expect(c.deleteTask(b), true);
+    expect(c.selectedTaskId, a);
+    expect(c.undoTaskChange(), true);
+    expect(c.selectedTaskId, b);
+    expect(c.pending.map((e) => e.id).toList(), [a, b]);
+  });
+
+  test('Undo preserves newly added or edited unrelated tasks', () {
+    final c = QingfanController();
+    addTearDown(c.dispose);
+    c.addTask('A');
+    c.addTask('B');
+    final b = c.pending.last.id;
+    expect(c.deleteTask(b), true);
+    c.addTask('C');
+    final third = c.pending.last.id;
+    c.renameTask(third, 'C edited');
+    expect(c.undoTaskChange(), true);
+    expect(c.pending.map((e) => e.title).toList(), ['A', 'B', 'C edited']);
+    expect(c.undoTaskChange(), false);
+  });
+
+  test('Completed count survives selection changes and restore', () {
+    final c = QingfanController();
+    addTearDown(c.dispose);
+    c.addTask('A');
+    final task = c.pending.first;
+    task.pomodoros = 4;
+    expect(c.completeTask(task.id), true);
+    expect(c.completed.single.pomodoros, 4);
+    expect(c.completeTask(task.id), true);
+    expect(c.pending.single.pomodoros, 4);
+  });
+
+  test('Fifty items keep a single ordered queue with keyboard movement', () {
+    final c = QingfanController();
+    addTearDown(c.dispose);
+    for (var i = 0; i < 50; i++) {
+      c.addTask('Task $i');
+    }
+    expect(c.pending.length, 50);
+    final bottom = c.pending.last.id;
+    c.moveTask(bottom, -1);
+    expect(c.pending[48].id, bottom);
+    expect(c.pending[49].title, 'Task 48');
+    c.reorderTask(0, 49);
+    expect(c.pending.last.title, 'Task 0');
+    expect(c.pending.length, 50);
+  });
+
+  test('Local JSON state is saved and loaded without network', () async {
+    final directory = await Directory.systemTemp.createTemp('qingfan-test-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = LocalStore(testDirectory: directory);
+    final a = QingfanController(store: store);
+    a.addTask('测试任务');
+    a.setOpacity(.85);
+    await a.flush();
+    a.dispose();
+    final b = QingfanController(store: store);
+    await b.load();
+    expect(b.tasks.single.title, '测试任务');
+    expect(b.glassOpacity, .85);
+    b.dispose();
+  });
+
+  testWidgets('Fifty-task drawer retains a scrollable list and fixed action',
+      (tester) async {
+    final c = QingfanController();
+    for (var i = 0; i < 50; i++) {
+      c.addTask('任务 $i');
+    }
+    var started = false;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 450,
+          height: 540,
+          child: TaskDrawer(
+            controller: c,
+            onClose: () {},
+            onStart: () => started = true,
+          ),
+        ),
+      ),
+    ));
+    expect(find.byKey(const Key('taskScroll')), findsOneWidget);
+    expect(find.byKey(const Key('drawerStartFocus')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('drawerStartFocus')));
+    expect(started, true);
+    c.dispose();
+  });
+}
