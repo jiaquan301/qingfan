@@ -35,7 +35,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev \
-            xvfb dbus-x11 openbox wmctrl x11-utils
+            xvfb dbus-x11 openbox wmctrl x11-utils imagemagick
       - name: Reproducibly generate Flutter desktop runners
         working-directory: flutter_app
         run: |
@@ -53,7 +53,7 @@ jobs:
         run: flutter build linux --release --no-pub
       - name: Actual native X11 window acceptance
         working-directory: flutter_app
-        run: dbus-run-session -- xvfb-run -a bash tool/native_smoke.sh
+        run: dbus-run-session -- xvfb-run -a env QINGFAN_NATIVE_CAPTURE=1 bash tool/native_smoke.sh
       - name: Debian installer candidate
         working-directory: flutter_app
         run: bash tool/package_linux.sh
@@ -73,6 +73,7 @@ jobs:
           path: |
             flutter_app/dist/*.deb
             flutter_app/native-smoke.log
+            flutter_app/native-shots/*.png
           if-no-files-found: warn
 
   windows:
