@@ -73,21 +73,50 @@ class _TaskDrawerState extends State<TaskDrawer> {
         !await _confirmDiscard()) {
       return;
     }
-    if (c.completeTask(task.id, discardPartial: true)) _undoSnackbar();
+    c.completeTask(task.id, discardPartial: true);
   }
 
-  void _undoSnackbar() {
-    final controller = widget.controller;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      duration: const Duration(seconds: 7),
-      content: Text(controller.undoMessage ?? '任务已更新'),
-      action: SnackBarAction(
-        label: '撤销',
-        onPressed: () => controller.undoTaskChange(),
-      ),
-    ));
-  }
+  // An undo operation already has one authoritative seven-second expiry in
+  // QingfanController. Flutter SnackBars with an action may remain visible
+  // indefinitely when accessibility navigation is enabled; their lifetime
+  // must not be used as the source of truth for task undo.
+  Widget _undoBanner() => AnimatedBuilder(
+        animation: widget.controller,
+        builder: (context, _) {
+          final c = widget.controller;
+          if (!c.canUndo || c.undoMessage == null) {
+            return const SizedBox.shrink(key: Key('undoBannerHidden'));
+          }
+          return Container(
+            key: const Key('undoTaskBanner'),
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F3EB),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    c.undoMessage!,
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF337259),
+                    ),
+                  ),
+                ),
+                TextButton(
+                  key: const Key('undoTaskAction'),
+                  onPressed: c.undoTaskChange,
+                  child: const Text('撤销'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
 
   void _message(String text) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -299,6 +328,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
               ),
             ),
           ),
+          _undoBanner(),
           const SizedBox(height: 10),
           FilledButton(
             key: const Key('drawerStartFocus'),
@@ -345,6 +375,6 @@ class _TaskDrawerState extends State<TaskDrawer> {
         !await _confirmDiscard()) {
       return;
     }
-    if (c.deleteTask(task.id, discardPartial: true)) _undoSnackbar();
+    c.deleteTask(task.id, discardPartial: true);
   }
 }
