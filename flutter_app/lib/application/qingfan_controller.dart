@@ -48,6 +48,21 @@ class QingfanTask {
   }
 }
 
+class TaskUndo {
+  TaskUndo({
+    required this.before,
+    required this.index,
+    required this.currentBefore,
+    required this.currentAfter,
+    this.focusBefore,
+  });
+  final QingfanTask before;
+  final int index;
+  final String? currentBefore;
+  final String? currentAfter;
+  final Map<String, dynamic>? focusBefore;
+}
+
 class QingfanController extends ChangeNotifier {
   QingfanController({FocusEngine? engine, LocalStore? store})
       : engine = engine ?? FocusEngine(),
@@ -85,7 +100,69 @@ class QingfanController extends ChangeNotifier {
 
   late final Timer _ticker;
   Timer? _saveDebounce;
+  Timer? _undoTimer;
+  TaskUndo? _undo;
+  String? undoMessage;
   int _serial = 0;
+
+  bool get canUndo => _undo != null;
+
+  TaskUndo _snapshot(String id) {
+    final index = tasks.indexWhere((t) => t.id == id);
+    final item = tasks[index];
+    return TaskUndo(
+      before: QingfanTask(
+        id: item.id, title: item.title, done: item.done,
+        pomodoros: item.pomodoros,
+      ),
+      index: index,
+      currentBefore: selectedTaskId,
+      currentAfter: selectedTaskId,
+      focusBefore: selectedTaskId == id && !engine.isRunning
+          ? engine.toJson()
+          : null,
+    );
+  }
+
+  void _setUndo(TaskUndo previous, String message) {
+    _undoTimer?.cancel();
+    _undo = TaskUndo(
+      before: previous.before, index: previous.index,
+      currentBefore: previous.currentBefore,
+      currentAfter: selectedTaskId,
+      focusBefore: previous.focusBefore,
+    );
+    undoMessage = message;
+    _undoTimer = Timer(const Duration(seconds: 7), () {
+      _undo = null;
+      undoMessage = null;
+      notifyListeners();
+    });
+  }
+
+  bool undoTaskChange() {
+    final op = _undo;
+    if (op == null) return false;
+    _undoTimer?.cancel();
+    _undo = null;
+    undoMessage = null;
+    // Inverse a single task without rolling back unrelated additions/edits.
+    tasks.removeWhere((t) => t.id == op.before.id);
+    final pendingCount = tasks.where((t) => !t.done).length;
+    final insert = op.before.done
+        ? math.max(pendingCount, math.min(op.index, tasks.length))
+        : math.min(op.index, pendingCount);
+    tasks.insert(insert, op.before);
+    if (selectedTaskId == op.currentAfter && !engine.isRunning &&
+        (op.currentBefore == null ||
+            tasks.any((t) => t.id == op.currentBefore && !t.done))) {
+      selectedTaskId = op.currentBefore;
+      if (op.focusBefore != null) engine.restore(op.focusBefore!);
+    }
+    notifyListeners();
+    _scheduleSave();
+    return true;
+  }
 
   List<QingfanTask> get pending => tasks.where((t) => !t.done).toList();
   List<QingfanTask> get completed => tasks.where((t) => t.done).toList();
@@ -208,6 +285,7 @@ class QingfanController extends ChangeNotifier {
       return false;
     }
     if (isCurrent && engine.hasPartialFocus && !discardPartial) return false;
+    final previous = _snapshot(id);
     if (isCurrent && engine.hasPartialFocus) engine.reset();
     task.done = !task.done;
     tasks.removeAt(index);
@@ -221,6 +299,7 @@ class QingfanController extends ChangeNotifier {
       final firstCompleted = tasks.indexWhere((t) => t.done);
       tasks.insert(firstCompleted < 0 ? tasks.length : firstCompleted, task);
     }
+    _setUndo(previous, task.done ? '任务已完成' : '任务已恢复');
     notifyListeners();
     _scheduleSave();
     return true;
@@ -260,6 +339,7 @@ class QingfanController extends ChangeNotifier {
     final isCurrent = selectedTaskId == id;
     if (isCurrent && engine.isRunning) return false;
     if (isCurrent && engine.hasPartialFocus && !discardPartial) return false;
+    final previous = _snapshot(id);
     if (isCurrent && engine.hasPartialFocus) engine.reset();
     tasks.removeAt(index);
     if (isCurrent) {
@@ -268,6 +348,7 @@ class QingfanController extends ChangeNotifier {
           ? null
           : remaining[math.min(index, remaining.length - 1)].id;
     }
+    _setUndo(previous, '任务已删除');
     notifyListeners();
     _scheduleSave();
     return true;
@@ -338,6 +419,7 @@ class QingfanController extends ChangeNotifier {
   void dispose() {
     _ticker.cancel();
     _saveDebounce?.cancel();
+    _undoTimer?.cancel();
     super.dispose();
   }
 }
