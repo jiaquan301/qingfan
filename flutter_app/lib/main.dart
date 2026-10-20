@@ -58,6 +58,27 @@ Future<void> _nativeSmoke(
       throw StateError('$name size expected $requested but was $measured');
     }
     stdout.writeln('NATIVE_SMOKE_SIZE $name: $measured');
+    if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_CAPTURE'] == '1') {
+      final windows = await Process.run('wmctrl', ['-l']);
+      final match = windows.stdout.toString().split('\n').firstWhere(
+        (line) => line.contains('青番') || line.toLowerCase().contains('qingfan'),
+        orElse: () => '',
+      );
+      if (match.isEmpty) throw StateError('No Qingfan X11 window to capture');
+      final id = match.trim().split(RegExp(r'\s+')).first;
+      await Directory('native-shots').create(recursive: true);
+      final output = 'native-shots/$name.png';
+      final screenshot = await Process.run(
+        'import', ['-window', id, '-depth', '8', output]);
+      if (screenshot.exitCode != 0 || !File(output).existsSync()) {
+        throw StateError('Native screenshot $name failed: ${screenshot.stderr}');
+      }
+      final bytes = await File(output).length();
+      if (bytes < 2500) {
+        throw StateError('Native screenshot $name is suspiciously blank ($bytes bytes)');
+      }
+      stdout.writeln('NATIVE_SCREENSHOT $name $output $bytes bytes');
+    }
   }
 
   try {
