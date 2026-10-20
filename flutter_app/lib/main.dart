@@ -59,17 +59,31 @@ Future<void> _nativeSmoke(
     }
     stdout.writeln('NATIVE_SMOKE_SIZE $name: $measured');
     if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_CAPTURE'] == '1') {
-      final windows = await Process.run('wmctrl', ['-l']);
+      final windows = await Process.run('wmctrl', ['-lG']);
       final match = windows.stdout.toString().split('\n').firstWhere(
         (line) => line.contains('青番') || line.toLowerCase().contains('qingfan'),
         orElse: () => '',
       );
       if (match.isEmpty) throw StateError('No Qingfan X11 window to capture');
-      final id = match.trim().split(RegExp(r'\s+')).first;
+      final fields = match.trim().split(RegExp(r'\s+'));
+      if (fields.length < 6) throw StateError('Invalid wmctrl geometry: $match');
+      final x = int.parse(fields[2]);
+      final y = int.parse(fields[3]);
+      final width = int.parse(fields[4]);
+      final height = int.parse(fields[5]);
+      if (width < 80 || height < 80) {
+        throw StateError('Invalid screenshot bounds: $match');
+      }
       await Directory('native-shots').create(recursive: true);
       final output = 'native-shots/$name.png';
+      // An ARGB GTK surface without X11 compositing can read back as entirely
+      // transparent. Capture the composited ROOT framebuffer and crop to the
+      // native window rectangle to inspect what a desktop user actually sees.
       final screenshot = await Process.run(
-        'import', ['-window', id, '-depth', '8', output]);
+        'import', [
+          '-window', 'root', '-crop',
+          '${width}x${height}+${x}+${y}', '-depth', '8', output,
+        ]);
       if (screenshot.exitCode != 0 || !File(output).existsSync()) {
         throw StateError('Native screenshot $name failed: ${screenshot.stderr}');
       }
