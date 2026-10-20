@@ -82,7 +82,7 @@ Future<void> _nativeSmoke(
       final screenshot = await Process.run(
         'import', [
           '-window', 'root', '-crop',
-          '${width}x${height}+${x}+${y}', '-depth', '8', output,
+          '${width}x$height+$x+$y', '-depth', '8', output,
         ]);
       if (screenshot.exitCode != 0 || !File(output).existsSync()) {
         throw StateError('Native screenshot $name failed: ${screenshot.stderr}');
