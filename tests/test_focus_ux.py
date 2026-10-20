@@ -225,6 +225,19 @@ class FocusGuiTests(GuiTests):
         self.assertEqual(self.window.model.seconds(), 1400)
         self.assertFalse(self.window.model.running())
 
+    def test_undo_during_new_running_focus_preserves_new_current_timer(self):
+        first, second = [task['id'] for task in self.window.model.pending_tasks[:2]]
+        self.window.complete_task(first, True)
+        self.assertEqual(self.window.model.current_id, second)
+        self.window.toggle_timer()
+        self.assertTrue(self.window.model.running())
+        deadline = self.window.model.deadline
+        self.window.undo_delete()
+        self.assertEqual(self.window.model.current_id, second)
+        self.assertEqual(self.window.model.deadline, deadline)
+        self.assertTrue(self.window.model.running())
+        self.assertEqual(self.window.model.pending_tasks[0]['id'], first)
+
     def test_five_twenty_and_fifty_tasks_keep_window_fixed_and_scroll(self):
         while Gtk.events_pending():
             Gtk.main_iteration_do(False)
