@@ -115,6 +115,14 @@ def main():
     capture(w.orb_window, 'mini')
     w.orb_window.open_tasks()
     drain()
+    print('TASK_PRIMARY', {
+        'current_id': w.model.current_id,
+        'tasks': len(w.model.pending_tasks),
+        'sensitive': w.task_primary_button.get_sensitive(),
+        'label': w.task_primary_button.get_label(),
+    }, flush=True)
+    if w.model.current_id is None or not w.task_primary_button.get_sensitive():
+        raise RuntimeError('Selected task must enable primary focus action')
     capture(w, 'tasks')
     assert_task_footer_visible(w)
 
