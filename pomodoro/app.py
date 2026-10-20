@@ -712,7 +712,11 @@ class Window(Gtk.ApplicationWindow):
         pick = style(Gtk.Button(), 'task-pick')
         pick.set_relief(Gtk.ReliefStyle.NONE)
         pick.set_hexpand(True)
-        pick.set_tooltip_text('点击选择为当前任务' if not done else '已完成任务；取消勾选可恢复')
+        pick.set_tooltip_text(
+            '当前任务' if active else
+            ('点击选择为当前任务' if not done else '已完成任务；取消勾选可恢复'))
+        pick.get_accessible().set_name(
+            ('当前任务：' if active else '选择任务：') + task['title'])
         text = label(task['title'], 'task-title-text', xalign=0)
         text.set_hexpand(True)
         text.set_ellipsize(Pango.EllipsizeMode.END)
@@ -731,6 +735,10 @@ class Window(Gtk.ApplicationWindow):
         field.connect('focus-out-event', lambda *_: self._finish_edit())
         field.connect('key-press-event', self._edit_key)
         row.pack_start(stack, True, True, 0)
+        if active:
+            marker = label('当前', 'current-marker')
+            marker.set_tooltip_text('正在选择的专注任务')
+            row.pack_start(marker, False, False, 0)
 
         pomodoros = task.get('pomodoros', 0)
         if pomodoros > 0:
@@ -982,6 +990,7 @@ class Window(Gtk.ApplicationWindow):
         self.model.tasks.insert(insert_at, dict(target))
         previous_current = snapshot['current_id']
         if (self.model.current_id == snapshot['after_current_id']
+                and not (self.model.phase == 'focus' and self.model.running())
                 and (previous_current is None
                      or any(task['id'] == previous_current and not task['done']
                             for task in self.model.tasks))):
