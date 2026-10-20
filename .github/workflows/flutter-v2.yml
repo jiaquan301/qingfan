@@ -3,11 +3,7 @@ name: Qingfan Flutter V2 candidate
 on:
   push:
     branches: ['feat/qingfan-v2-*']
-  pull_request:
-    paths:
-      - 'flutter_app/**'
-      - '.github/workflows/flutter-v2.yml'
-      - 'docs/v2-**'
+  workflow_dispatch:
 
 concurrency:
   group: qingfan-v2-${{ github.head_ref || github.ref_name }}
