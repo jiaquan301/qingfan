@@ -92,7 +92,16 @@ Future<void> _nativeSmoke(
         throw StateError('Native screenshot $name has unexpected dimensions: ${dimensions.stdout}');
       }
       final bytes = await File(output).length();
-      stdout.writeln('NATIVE_SCREENSHOT $name $output $bytes bytes');
+      final rootOutput = 'native-shots/$name-root.png';
+      final rootCapture = await Process.run('import', [
+        '-window', 'root', '-crop',
+        '${width}x$height+${int.parse(fields[2])}+${int.parse(fields[3])}',
+        '-depth', '8', rootOutput,
+      ]);
+      if (rootCapture.exitCode != 0 || !File(rootOutput).existsSync()) {
+        throw StateError('Native root screenshot $name failed: ${rootCapture.stderr}');
+      }
+      stdout.writeln('NATIVE_SCREENSHOT $name direct=$bytes bytes root=${await File(rootOutput).length()} bytes');
     }
   }
 
