@@ -31,11 +31,11 @@ elif ('gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)))'
 # The generated runner explicitly paints its own black surface BEFORE Dart
 # applies WindowOptions. Give the underlying Flutter surface an alpha channel.
 old_background = 'gdk_rgba_parse(&background_color, "#000000");'
-new_background = 'gdk_rgba_parse(&background_color, "#00000000");'
+new_background = 'gdk_rgba_parse(&background_color, "#F5F7F4");'
 if source.count(old_background) == 1:
     source = source.replace(old_background, new_background, 1)
 elif source.count(new_background) != 1:
     raise SystemExit("Flutter Linux background color template not recognized")
 
 runner.write_text(source, encoding="utf-8")
-print("LINUX_RUNNER_PATCH_PASS: default=376x408, first-frame show, alpha surface")
+print("LINUX_RUNNER_PATCH_PASS: default=376x408, first-frame show, visible fallback surface")
