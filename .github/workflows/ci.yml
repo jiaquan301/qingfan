@@ -32,7 +32,11 @@ jobs:
           GSETTINGS_BACKEND: memory
           G_DEBUG: fatal-criticals
           PYTHONDONTWRITEBYTECODE: "1"
-        run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/capture_visual.py
+        run: |
+          for scene in focus mini tasks long_tasks; do
+            echo "=== GTK visual acceptance: $scene ==="
+            dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/capture_visual.py "$scene"
+          done
       - name: Save visual regression evidence
         if: always()
         uses: actions/upload-artifact@v4
