@@ -260,11 +260,14 @@ class _QingfanAppState extends State<QingfanApp> {
     switch (selected) {
       case 'settings':
         _showSettings();
+        break;
       case 'reset':
         await _confirmReset();
+        break;
       case 'pin':
         c.setAlwaysOnTop(!c.alwaysOnTop);
         await widget.bridge.applyTopmost(c);
+        break;
     }
   }
 
