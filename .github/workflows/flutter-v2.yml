@@ -1,0 +1,45 @@
+name: Qingfan Flutter V2 candidate
+
+on:
+  push:
+    branches: ['feat/qingfan-v2-*']
+  pull_request:
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/flutter-v2.yml'
+
+jobs:
+  flutter-linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.0'
+          cache: true
+      - name: Install Linux runner build toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+      - name: Generate stable desktop runners and fetch dependencies
+        working-directory: flutter_app
+        run: |
+          flutter create --no-pub --project-name qingfan --platforms=linux,windows,macos .
+          flutter pub get
+      - name: Analyze source
+        working-directory: flutter_app
+        run: flutter analyze
+      - name: Domain and widget tests
+        working-directory: flutter_app
+        run: flutter test
+      - name: Linux release compilation
+        working-directory: flutter_app
+        run: flutter build linux --release
+      - name: Export Ubuntu candidate (not yet a published installer)
+        uses: actions/upload-artifact@v4
+        with:
+          name: qingfan-v2-linux-candidate
+          path: flutter_app/build/linux/x64/release/bundle/
+          if-no-files-found: error
