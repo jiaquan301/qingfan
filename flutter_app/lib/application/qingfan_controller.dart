@@ -100,6 +100,7 @@ class QingfanController extends ChangeNotifier {
 
   late final Timer _ticker;
   Timer? _saveDebounce;
+  Future<void> _saveQueue = Future<void>.value();
   Timer? _undoTimer;
   TaskUndo? _undo;
   String? undoMessage;
@@ -410,17 +411,32 @@ class QingfanController extends ChangeNotifier {
         'session': engine.toJson(),
       };
 
+  Future<void> _enqueueSave() {
+    final store = _store;
+    if (store == null) return Future<void>.value();
+    // Capture the state NOW. All writes are serialized so async disk IO
+    // cannot race over the same temporary file or regress to stale state.
+    final snapshot = toJson();
+    _saveQueue = _saveQueue.then((_) => store.save(snapshot)).catchError(
+      (Object error, StackTrace trace) {
+        statusMessage = '本地数据保存失败，请检查磁盘空间与目录权限';
+        notifyListeners();
+      },
+    );
+    return _saveQueue;
+  }
+
   void _scheduleSave() {
     if (_store == null) return;
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 450), () {
-      unawaited(_store.save(toJson()));
+      unawaited(_enqueueSave());
     });
   }
 
   Future<void> flush() async {
     _saveDebounce?.cancel();
-    if (_store != null) await _store.save(toJson());
+    await _enqueueSave();
   }
 
   @override
