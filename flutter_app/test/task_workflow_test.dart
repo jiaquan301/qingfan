@@ -90,30 +90,47 @@ void main() {
     b.dispose();
   });
 
-  testWidgets('Fifty-task drawer retains a scrollable list and fixed action',
+  testWidgets('5, 20 and 50 tasks keep the primary action fixed and reachable',
       (tester) async {
-    final c = QingfanController();
-    for (var i = 0; i < 50; i++) {
-      c.addTask('任务 $i');
-    }
-    var started = false;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SizedBox(
-          width: 450,
-          height: 540,
-          child: TaskDrawer(
-            controller: c,
-            onClose: () {},
-            onStart: () => started = true,
+    for (final count in [5, 20, 50]) {
+      final c = QingfanController();
+      for (var i = 0; i < count; i++) {
+        c.addTask('任务 $i');
+      }
+      var started = false;
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 450,
+            height: 540,
+            child: TaskDrawer(
+              controller: c,
+              onClose: () {},
+              onStart: () => started = true,
+            ),
           ),
         ),
-      ),
-    ));
-    expect(find.byKey(const Key('taskScroll')), findsOneWidget);
-    expect(find.byKey(const Key('drawerStartFocus')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('drawerStartFocus')));
-    expect(started, true);
-    c.dispose();
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('taskScroll')), findsOneWidget);
+      final action = find.byKey(const Key('drawerStartFocus'));
+      expect(action, findsOneWidget);
+      final initialRect = tester.getRect(action);
+      expect(initialRect.bottom, lessThanOrEqualTo(540));
+      expect(initialRect.top, greaterThanOrEqualTo(0));
+
+      if (count == 50) {
+        await tester.scrollUntilVisible(find.text('任务 49'),
+            260, scrollable: find.byKey(const Key('taskScroll')));
+        await tester.pumpAndSettle();
+        final afterScrollRect = tester.getRect(action);
+        expect(afterScrollRect.top, initialRect.top);
+        expect(afterScrollRect.bottom, initialRect.bottom);
+        expect(find.text('任务 49'), findsOneWidget);
+      }
+      await tester.tap(action);
+      expect(started, true);
+      c.dispose();
+    }
   });
 }
