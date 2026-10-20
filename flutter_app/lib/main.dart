@@ -185,6 +185,7 @@ class QingfanApp extends StatefulWidget {
 }
 
 class _QingfanAppState extends State<QingfanApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Future<void> _windowSequence = Future<void>.value();
 
   QingfanController get c => widget.controller;
@@ -220,8 +221,10 @@ class _QingfanAppState extends State<QingfanApp> {
   Future<void> _showMoreMenu() async {
     // Low-frequency operations belong to a discoverable secondary menu,
     // not four equally prominent corner buttons around the timepiece.
+    final navigatorContext = _navigatorKey.currentContext;
+    if (navigatorContext == null) return;
     final selected = await showMenu<String>(
-      context: context,
+      context: navigatorContext,
       position: const RelativeRect.fromLTRB(150, 255, 55, 65),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: const Color(0xFFF9FBF8),
@@ -297,8 +300,10 @@ class _QingfanAppState extends State<QingfanApp> {
       c.resetFocus();
       return;
     }
+    final navigatorContext = _navigatorKey.currentContext;
+    if (navigatorContext == null) return;
     final accepted = await showDialog<bool>(
-      context: context,
+      context: navigatorContext,
       builder: (dialogContext) => AlertDialog(
         title: const Text('重新开始这一轮？'),
         content: const Text('未完成的专注时间会清零，已经获得的番茄次数不会改变。'),
@@ -320,6 +325,7 @@ class _QingfanAppState extends State<QingfanApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: '青番',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
