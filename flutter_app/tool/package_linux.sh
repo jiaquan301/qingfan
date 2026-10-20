@@ -2,7 +2,7 @@
 # Builds an installable Debian candidate from the exact Flutter release bundle.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version="${QINGFAN_VERSION:-2.0.0~dev1}"
+version="${QINGFAN_VERSION:-2.0.0~dev2}"
 bundle="build/linux/x64/release/bundle"
 [[ -x "$bundle/qingfan" ]] || { echo "Missing Linux release bundle" >&2; exit 1; }
 command -v dpkg-deb >/dev/null
