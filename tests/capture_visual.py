@@ -123,6 +123,14 @@ def main():
     }, flush=True)
     if w.model.current_id is None or not w.task_primary_button.get_sensitive():
         raise RuntimeError('Selected task must enable primary focus action')
+    print('TASK_BUTTON_STATE', {
+        'effective_sensitive': w.task_primary_button.is_sensitive(),
+        'state_flags': int(w.task_primary_button.get_state_flags()),
+    }, flush=True)
+    w.task_primary_button.queue_draw()
+    drain()
+    time.sleep(0.15)
+    drain()
     capture(w, 'tasks')
     assert_task_footer_visible(w)
 
