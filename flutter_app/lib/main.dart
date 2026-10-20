@@ -23,7 +23,8 @@ Future<void> main(List<String> args) async {
   controller.setMode(ClockMode.full);
   runApp(QingfanApp(controller: controller, bridge: bridge));
   await bridge.showInitial(controller);
-  if (args.contains('--native-smoke')) {
+  if (args.contains('--native-smoke') ||
+      Platform.environment['QINGFAN_NATIVE_SMOKE'] == '1') {
     await _nativeSmoke(controller, bridge);
   }
 }
