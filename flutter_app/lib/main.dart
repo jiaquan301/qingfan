@@ -86,12 +86,18 @@ Future<void> _nativeSmoke(
     await bridge.applyTopmost(controller);
     stdout.writeln('NATIVE_SMOKE_PASS single-runner full mini panel topmost');
     await controller.flush();
+    // Closing the native Flutter view invokes asynchronous GTK/engine
+    // disposal. Do NOT call exit() during that process: it races engine
+    // destruction and crashes Linux with FlutterEngineRemoveView.
     await bridge.close();
-    exit(0);
+    await Future<void>.delayed(const Duration(seconds: 2));
+    stdout.writeln('NATIVE_SMOKE_GRACEFUL_CLOSE_PASS');
+    // The native GTK process should exit on its own when its only window
+    // closes. If it stays running the external timeout correctly fails CI.
   } catch (error, trace) {
     stderr.writeln('NATIVE_SMOKE_FAIL: $error\n$trace');
+    exitCode = 1;
     await bridge.close();
-    exit(1);
   }
 }
 
