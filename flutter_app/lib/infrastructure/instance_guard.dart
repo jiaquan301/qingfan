@@ -1,45 +1,87 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-/// Cooperative cross-platform, crash-safe lock per local user.
-///
-/// The OS releases an advisory file lock when its process exits, including
-/// abnormal termination. This prevents duplicate Qingfan native windows.
-/// Raising an existing window is best-effort and cannot be guaranteed on
-/// Linux Wayland; it is intentionally not conflated with singleton correctness.
+/// Atomic per-user process lock. Unlike RandomAccessFile.lock(), which waits
+/// for a contested lock, exclusive file creation returns immediately.
+/// The owner PID lets the next launch recover a stale lock after a crash.
 class InstanceGuard {
   InstanceGuard({Directory? testDirectory}) : _directory = testDirectory;
 
   final Directory? _directory;
-  RandomAccessFile? _heldFile;
+  File? _lockFile;
+  int? _ownerPid;
 
-  bool get acquired => _heldFile != null;
+  bool get acquired => _lockFile != null;
 
   Future<bool> acquire() async {
-    if (_heldFile != null) return true;
+    if (acquired) return true;
     final directory = _directory ?? await getApplicationSupportDirectory();
     await directory.create(recursive: true);
-    final path = '${directory.path}${Platform.pathSeparator}qingfan.instance.lock';
-    final file = await File(path).open(mode: FileMode.append);
+    final file = File('${directory.path}${Platform.pathSeparator}qingfan.instance.lock');
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await file.create(exclusive: true);
+        await file.writeAsString('${pid}\n', flush: true);
+        _lockFile = file;
+        _ownerPid = pid;
+        return true;
+      } on FileSystemException {
+        if (!await file.exists()) {
+          if (attempt == 0) continue;
+          rethrow;
+        }
+        var content = (await file.readAsString()).trim();
+        // Give a newly created owner a short window to write its PID.
+        if (content.isEmpty) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          content = (await file.readAsString()).trim();
+        }
+        final owner = int.tryParse(content);
+        if (owner != null && await _isAlive(owner)) return false;
+        // Remove only the stale lock that was actually inspected.
+        final current = (await file.readAsString()).trim();
+        if (current == content) {
+          try {
+            await file.delete();
+          } on FileSystemException {
+            return false;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Future<bool> _isAlive(int processId) async {
+    if (processId == pid) return true;
     try {
-      await file.lock(FileLock.exclusive, 0, 1);
-      _heldFile = file;
-      return true;
-    } on FileSystemException {
-      await file.close();
+      if (Platform.isWindows) {
+        final result = await Process.run('tasklist', ['/FI', 'PID eq $processId']);
+        return result.exitCode == 0 &&
+            result.stdout.toString().contains(processId.toString());
+      }
+      final result = await Process.run('kill', ['-0', processId.toString()]);
+      return result.exitCode == 0;
+    } on ProcessException {
       return false;
     }
   }
 
   Future<void> release() async {
-    final file = _heldFile;
-    _heldFile = null;
+    final file = _lockFile;
+    final owner = _ownerPid;
+    _lockFile = null;
+    _ownerPid = null;
     if (file == null) return;
     try {
-      await file.unlock(0, 1);
-    } finally {
-      await file.close();
+      if (await file.exists() && (await file.readAsString()).trim() == '$owner') {
+        await file.delete();
+      }
+    } on FileSystemException {
+      // Process exit also makes the PID stale; the next launch recovers it.
     }
   }
 }
