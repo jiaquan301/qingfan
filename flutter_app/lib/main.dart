@@ -213,6 +213,29 @@ class _QingfanAppState extends State<QingfanApp> {
     _surface(c.closePanel);
   }
 
+  bool get _textFieldHasFocus {
+    final context = FocusManager.instance.primaryFocus?.context;
+    return context != null &&
+        (context.widget is EditableText ||
+            context.findAncestorWidgetOfExactType<EditableText>() != null);
+  }
+
+  void _spaceShortcut() {
+    // Typing a space in a task title or search field must never pause
+    // or start the focus timer in the background.
+    if (!_textFieldHasFocus) c.toggleFocus();
+  }
+
+  void _escapeShortcut() {
+    // An editing field owns Escape first; only Escape from clock chrome
+    // should close the whole task panel.
+    if (_textFieldHasFocus) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    } else {
+      _closePanel();
+    }
+  }
+
   Future<void> _confirmReset() async {
     if (!c.engine.isRunning && !c.engine.hasPartialFocus) {
       c.resetFocus();
@@ -251,10 +274,10 @@ class _QingfanAppState extends State<QingfanApp> {
       ),
       home: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.space): c.toggleFocus,
+          const SingleActivator(LogicalKeyboardKey.space): _spaceShortcut,
           const SingleActivator(LogicalKeyboardKey.keyL, control: true): _showTasks,
           const SingleActivator(LogicalKeyboardKey.keyF, control: true): _showTasks,
-          const SingleActivator(LogicalKeyboardKey.escape): _closePanel,
+          const SingleActivator(LogicalKeyboardKey.escape): _escapeShortcut,
         },
         child: Focus(
           autofocus: true,
