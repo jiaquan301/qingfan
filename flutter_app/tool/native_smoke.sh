@@ -25,7 +25,7 @@ trap 'rm -f "$seen_file"; cleanup' EXIT
 ) &
 watch_pid=$!
 set +e
-timeout 35s "$app" --native-smoke >native-smoke.log 2>&1
+QINGFAN_NATIVE_SMOKE=1 timeout 35s "$app" >native-smoke.log 2>&1
 status=$?
 set -e
 cat native-smoke.log
