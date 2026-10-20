@@ -38,8 +38,8 @@ void main() {
     await tester.pump();
     await gesture.up();
     expect(drags, 1);
-    final grip = tester.getCenter(find.byKey(const Key('fullDragHandle')));
-    final next = await tester.startGesture(grip);
+    final side = Offset(ring.left + 28, ring.center.dy);
+    final next = await tester.startGesture(side);
     await next.moveBy(const Offset(32, 12));
     await tester.pump();
     await next.up();
@@ -58,8 +58,9 @@ void main() {
     final c = QingfanController();
     var drags = 0;
     await tester.pumpWidget(_clock(c, () => drags++, mini: true));
-    final grip = tester.getCenter(find.byKey(const Key('miniDragHandle')));
-    final gesture = await tester.startGesture(grip);
+    final ring = tester.getRect(find.byKey(const Key('clockDragSurface')));
+    final side = Offset(ring.left + 12, ring.center.dy);
+    final gesture = await tester.startGesture(side);
     await gesture.moveBy(const Offset(32, 12));
     await tester.pump();
     await gesture.up();
