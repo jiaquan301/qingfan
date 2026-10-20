@@ -107,7 +107,7 @@ jobs:
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/qingfan-v2-windows-x64-unsigned.zip" -Force
       - name: Install Inno Setup compiler
         shell: pwsh
-        run: choco install innosetup --version=6.4.3 -y --no-progress
+        run: choco install innosetup -y --no-progress
       - name: Windows installer (unsigned test candidate)
         working-directory: flutter_app
         shell: pwsh
