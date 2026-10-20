@@ -221,7 +221,7 @@ class _QingfanAppState extends State<QingfanApp> {
   Future<void> _showMoreMenu() async {
     // Low-frequency operations belong to a discoverable secondary menu,
     // not four equally prominent corner buttons around the timepiece.
-    final navigatorContext = _navigatorKey.currentContext;
+    final navigatorContext = _navigatorKey.currentState?.overlay?.context;
     if (navigatorContext == null) return;
     final selected = await showMenu<String>(
       context: navigatorContext,
@@ -300,7 +300,7 @@ class _QingfanAppState extends State<QingfanApp> {
       c.resetFocus();
       return;
     }
-    final navigatorContext = _navigatorKey.currentContext;
+    final navigatorContext = _navigatorKey.currentState?.overlay?.context;
     if (navigatorContext == null) return;
     final accepted = await showDialog<bool>(
       context: navigatorContext,
