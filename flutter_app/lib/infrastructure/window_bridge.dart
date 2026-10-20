@@ -33,6 +33,7 @@ class DesktopWindowBridge {
     );
     await windowManager.waitUntilReadyToShow(options, () async {
       await windowManager.setAsFrameless();
+      await windowManager.setTitle('青番');
       await windowManager.setResizable(false);
       await applyTopmost(controller);
       await windowManager.show();
