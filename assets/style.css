@@ -216,3 +216,12 @@ window.orb-window, window.orb-window > decoration,
 .qingfan-window .list-scroller scrollbar.vertical {
   min-width: 8px;
 }
+
+.qingfan-window .current-marker {
+  color: #32654b;
+  font-size: 10px;
+  font-weight: 700;
+  background: #d7e7db;
+  border-radius: 6px;
+  padding: 3px 5px;
+}
