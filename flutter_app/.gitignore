@@ -1,0 +1,16 @@
+# Flutter/Dart generated build products
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+*.iml
+.idea/
+pubspec.lock.bak
+
+# Runner projects are bootstrapped from pinned Flutter SDK in CI
+# and are intentionally generated rather than included in this initial migration.
+linux/
+windows/
+macos/
