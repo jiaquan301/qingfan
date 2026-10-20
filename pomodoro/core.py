@@ -105,6 +105,9 @@ class Model:
                 repaired = True
             tasks.append({'id': tid, 'title': task['title'].strip()[:120],
                           'done': bool(task.get('done', False)), 'pomodoros': raw_count})
+        # Keep pending work together and completed work together on disk.
+        # Relative order within each group is preserved.
+        tasks = [task for task in tasks if not task['done']] + [task for task in tasks if task['done']]
         current_id = payload.get('current_id')
         if not isinstance(current_id, str) or current_id not in {t['id'] for t in tasks if not t['done']}:
             current_id = None
@@ -189,11 +192,27 @@ class Model:
         self.remaining = self.phase_duration
         return old_phase  # require explicit start for every new phase
 
+    @property
+    def pending_tasks(self) -> list[dict]:
+        """Tasks not marked complete, in the user's execution order."""
+        return [task for task in self.tasks if not task['done']]
+
+    @property
+    def completed_tasks(self) -> list[dict]:
+        """Completed tasks, in completion order."""
+        return [task for task in self.tasks if task['done']]
+
+    def _normalize_task_groups(self):
+        """Keep pending tasks first and completed tasks after them."""
+        self.tasks = self.pending_tasks + self.completed_tasks
+
     def add(self, title: str):
         title = title.strip()
         if not title:
             return
-        self.tasks.append({"id": uuid.uuid4().hex, "title": title[:120], "done": False, "pomodoros": 0})
+        task = {"id": uuid.uuid4().hex, "title": title[:120], "done": False, "pomodoros": 0}
+        first_completed = next((i for i, item in enumerate(self.tasks) if item['done']), len(self.tasks))
+        self.tasks.insert(first_completed, task)
 
     def rename(self, task_id: str, title: str):
         title = title.strip()
@@ -203,46 +222,71 @@ class Model:
                     task["title"] = title[:120]
                     break
 
-    def complete(self, task_id: str, done: bool):
-        for task in self.tasks:
-            if task["id"] == task_id:
-                task["done"] = done
-        if done and self.current_id == task_id:
-            self.current_id = None
+    def complete(self, task_id: str, done: bool) -> bool:
+        """Complete or restore a task while keeping each group internally ordered.
+
+        Restored tasks are appended to the pending queue. The current task is
+        cleared when completed; the UI decides whether to select the next one.
+        """
+        task = next((item for item in self.tasks if item['id'] == task_id), None)
+        if task is None or task['done'] == bool(done):
+            return False
+        if done:
+            # The most recently completed task goes to the end of the completed
+            # section; restoring a task appends it to the end of pending work.
+            self.tasks.remove(task)
+            task['done'] = True
+            self.tasks.append(task)
+            if self.current_id == task_id:
+                self.current_id = None
+        else:
+            task['done'] = False
+        self._normalize_task_groups()
+        return True
 
     def delete(self, task_id: str):
-        self.tasks = [t for t in self.tasks if t["id"] != task_id]
+        self.tasks = [task for task in self.tasks if task['id'] != task_id]
         if self.current_id == task_id:
             self.current_id = None
 
     def move(self, task_id: str, direction: int):
-        idx = next((i for i, task in enumerate(self.tasks) if task["id"] == task_id), -1)
-        to = idx + direction
-        if idx >= 0 and 0 <= to < len(self.tasks):
-            self.tasks[idx], self.tasks[to] = self.tasks[to], self.tasks[idx]
+        task = next((item for item in self.tasks if item['id'] == task_id), None)
+        if task is None or task.get('done'):
+            return
+        group = self.pending_tasks
+        idx = next((i for i, item in enumerate(group) if item['id'] == task_id), -1)
+        target = idx + direction
+        if idx < 0 or not 0 <= target < len(group):
+            return
+        group[idx], group[target] = group[target], group[idx]
+        self.tasks = group + self.completed_tasks
 
     def reorder(self, task_id: str, target_id: str, after: bool = False) -> bool:
-        """Move a task before/after a target without changing the current timer."""
+        """Reorder within the same status group without touching timer state."""
         if task_id == target_id:
             return False
-        source = next((t for t in self.tasks if t['id'] == task_id), None)
-        if source is None or not any(t['id'] == target_id for t in self.tasks):
+        source = next((item for item in self.tasks if item['id'] == task_id), None)
+        target = next((item for item in self.tasks if item['id'] == target_id), None)
+        if source is None or target is None or source['done'] != target['done']:
             return False
-        original = [t['id'] for t in self.tasks]
-        self.tasks.remove(source)
-        target = next(i for i, t in enumerate(self.tasks) if t['id'] == target_id)
-        self.tasks.insert(target + int(after), source)
-        return original != [t['id'] for t in self.tasks]
+        group = self.completed_tasks if source['done'] else self.pending_tasks
+        original = [item['id'] for item in group]
+        group.remove(source)
+        target_index = next(i for i, item in enumerate(group) if item['id'] == target_id)
+        group.insert(target_index + int(after), source)
+        if original == [item['id'] for item in group]:
+            return False
+        self.tasks = (self.pending_tasks + group) if source['done'] else (group + self.completed_tasks)
+        return True
 
     def select(self, task_id: str | None) -> bool:
-        """Select exactly one task. Switching abandons an unfinished focus.
-
-        Rest intervals remain untouched. Selection never starts the timer:
-        the main start/pause control is the only timer trigger.
-        """
-        if task_id is not None and not any(task['id'] == task_id for task in self.tasks):
+        """Select one pending task; never switch away during a running focus."""
+        if task_id is not None and not any(
+                task['id'] == task_id and not task['done'] for task in self.tasks):
             return False
         if self.current_id == task_id:
+            return False
+        if self.phase == 'focus' and self.running():
             return False
         if self.phase == 'focus':
             self.reset()
@@ -250,4 +294,6 @@ class Model:
         return True
 
     def current_title(self):
-        return next((task["title"] for task in self.tasks if task["id"] == self.current_id), "选择一个任务，开始专注")
+        return next((task["title"] for task in self.tasks
+                     if task["id"] == self.current_id and not task['done']),
+                    "选择任务，开始专注")

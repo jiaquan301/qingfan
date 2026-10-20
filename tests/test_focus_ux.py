@@ -1,5 +1,6 @@
 """Focus-first model and GTK interaction regression tests (青番 1.0)."""
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -95,29 +96,82 @@ class FocusGuiTests(GuiTests):
         self.assertFalse(self.window.model.running())
         self.assertTrue(self.window.compact)
 
-    def test_checkbox_selects_and_no_play_button_exists(self):
+    def test_primary_task_action_starts_focus_and_closes_manager(self):
+        self.assertEqual(self.window.task_primary_button.get_label(), '开始专注')
+        self.assertTrue(self.window.task_primary_button.get_sensitive())
+        self.window.task_primary_button.clicked()
+        self.assertTrue(self.window.model.running())
+        self.assertTrue(self.window.compact)
+        self.assertTrue(self.window.orb_window.get_visible())
+        self.window._set_mode(False)
+        self.assertEqual(self.window.task_primary_button.get_label(), '返回专注')
+        deadline = self.window.model.deadline
+        self.window.task_primary_button.clicked()
+        self.assertEqual(self.window.model.deadline, deadline)
+        self.assertTrue(self.window.compact)
+
+    def test_current_task_completion_click_during_focus_prompts_without_stopping(self):
+        current = self.window.model.current_id
+        self.window.task_primary_button.clicked()
+        deadline = self.window.model.deadline
+        self.window._set_mode(False)
+        check = self.window.rows_box.get_children()[0].get_children()[0]
+        self.assertTrue(check.get_sensitive())
+        check.set_active(True)
+        self.assertEqual(self.window.model.current_id, current)
+        self.assertFalse(next(task for task in self.window.model.tasks
+                              if task['id'] == current)['done'])
+        self.assertEqual(self.window.model.deadline, deadline)
+        self.assertIn('请先暂停', self.window.status_label.get_text())
+
+    def test_checkbox_means_complete_and_title_selects_current_task(self):
         first, second = (task["id"] for task in self.window.model.tasks[:2])
         self.assertEqual(self.window.model.current_id, first)
-        check = self.window.rows_box.get_children()[1].get_children()[0]
-        self.assertIsInstance(check, Gtk.CheckButton)
-        check.set_active(True)
-        self.assertEqual(self.window.model.current_id, second)
-        self.assertFalse(self.window.model.tasks[1]["done"])
-        self.assertTrue(self.window.rows_box.get_children()[1].get_children()[0].get_active())
-        self.assertFalse(self.window.rows_box.get_children()[0].get_children()[0].get_active())
-        self.assertEqual(len(self.window.rows_box.get_children()[0].get_children()), 5)
+        first_row, second_row = self.window.rows_box.get_children()[:2]
+        first_check, second_check = first_row.get_children()[0], second_row.get_children()[0]
+        self.assertIsInstance(first_check, Gtk.CheckButton)
+        self.assertFalse(first_check.get_active(), 'unchecked means the task is not completed')
+        self.assertFalse(second_check.get_active())
 
-    def test_task_selection_is_locked_during_running_focus(self):
+        second_stack = next(child for child in second_row.get_children() if isinstance(child, Gtk.Stack))
+        second_stack.get_child_by_name('title').clicked()
+        self.assertEqual(self.window.model.current_id, second)
+        self.assertFalse(next(task for task in self.window.model.tasks if task['id'] == second)['done'])
+        refreshed_rows = self.window.rows_box.get_children()
+        self.assertTrue(refreshed_rows[1].get_style_context().has_class('is-current'))
+        self.assertFalse(refreshed_rows[0].get_children()[0].get_active())
+        self.assertFalse(refreshed_rows[1].get_children()[0].get_active())
+
+        refreshed_rows[0].get_children()[0].set_active(True)
+        self.assertTrue(next(task for task in self.window.model.tasks if task['id'] == first)['done'])
+        self.assertEqual(self.window.model.current_id, second)
+        self.assertEqual(len(self.window.model.completed_tasks), 1)
+
+    def test_running_focus_prevents_task_switch_but_keeps_other_task_completable(self):
+        current_id = self.window.model.current_id
         self.window.toggle_timer()
         self.window._set_mode(False)
-        check = self.window.rows_box.get_children()[1].get_children()[0]
-        self.assertFalse(check.get_sensitive())
+        second_row = self.window.rows_box.get_children()[1]
+        check = second_row.get_children()[0]
+        stack = next(child for child in second_row.get_children() if isinstance(child, Gtk.Stack))
+        self.assertTrue(check.get_sensitive(), 'non-current tasks may still be completed')
+        stack.get_child_by_name('title').clicked()
+        self.assertEqual(self.window.model.current_id, current_id)
+        self.assertTrue(self.window.model.running())
+        self.assertIn('请先暂停', self.window.status_label.get_text())
 
-    def test_switch_task_resets_partial_focus(self):
+    def test_switch_task_confirms_before_discarding_partial_focus(self):
         self.window.model.start_pause(now=100)
         self.window.model.start_pause(now=200)
         self.assertEqual(self.window.model.seconds(), 1400)
-        self.window.select_task(self.window.model.tasks[1]["id"])
+        with patch.object(self.window, '_confirm_action', return_value=False) as confirm:
+            self.window.select_task(self.window.model.tasks[1]["id"])
+        confirm.assert_called_once()
+        self.assertEqual(self.window.model.current_id, self.window.model.tasks[0]['id'])
+        self.assertEqual(self.window.model.seconds(), 1400)
+
+        with patch.object(self.window, '_confirm_action', return_value=True):
+            self.window.select_task(self.window.model.tasks[1]["id"])
         self.assertEqual(self.window.model.seconds(), 1500)
         self.assertFalse(self.window.model.running())
 
@@ -139,7 +193,8 @@ class FocusGuiTests(GuiTests):
 
     def test_drop_reorders_and_keeps_same_selected_task(self):
         first, second, third = [t["id"] for t in self.window.model.tasks]
-        handle = self.window.rows_box.get_children()[2].get_children()[1]
+        handle = next(child for child in self.window.rows_box.get_children()[2].get_children()
+                      if getattr(child, '_qingfan_task_id', None) is not None)
         context = object()
         with patch("pomodoro.app.Gtk.drag_get_source_widget", return_value=handle), \
              patch("pomodoro.app.Gtk.drag_finish") as finish, \
@@ -157,3 +212,83 @@ class FocusGuiTests(GuiTests):
         self.window._dismiss_undo()
         self.assertFalse(self.window.undo_bar.get_visible())
         self.assertIsNone(self.window._deleted_task)
+    def test_completed_tasks_are_collapsed_and_can_be_restored(self):
+        first_id = self.window.model.pending_tasks[0]['id']
+        self.window.complete_task(first_id, True)
+        self.assertEqual(len(self.window.model.completed_tasks), 1)
+        self.assertEqual(len(self.window.model.pending_tasks), 2)
+        self.assertFalse(self.window.completed_rows_box.get_visible())
+        self.assertTrue(self.window.completed_toggle.get_visible())
+
+        self.window.completed_toggle.clicked()
+        self.assertTrue(self.window.completed_rows_box.get_visible())
+        completed_row = self.window.completed_rows_box.get_children()[0]
+        check = completed_row.get_children()[0]
+        self.assertTrue(check.get_active())
+        check.set_active(False)
+        self.assertEqual(len(self.window.model.completed_tasks), 0)
+        self.assertEqual(self.window.model.pending_tasks[-1]['id'], first_id)
+
+    def test_current_task_completion_does_not_stop_a_running_focus(self):
+        current_id = self.window.model.current_id
+        self.window.toggle_timer()
+        before = self.window.model.deadline
+        self.window.complete_task(current_id, True)
+        self.assertTrue(self.window.model.running())
+        self.assertEqual(self.window.model.current_id, current_id)
+        self.assertEqual(self.window.model.deadline, before)
+        self.assertFalse(self.window.model.tasks[0]['done'])
+
+    def test_undo_completion_restores_task_order_selection_and_partial_timer(self):
+        ids = [task['id'] for task in self.window.model.pending_tasks]
+        self.window.model.start_pause(now=100)
+        self.window.model.start_pause(now=200)
+        with patch.object(self.window, '_confirm_action', return_value=True):
+            self.window.complete_task(ids[0], True)
+        self.assertNotEqual(self.window.model.current_id, ids[0])
+        self.assertEqual(self.window.model.seconds(), 1500)
+        self.window.undo_delete()
+        self.assertEqual([task['id'] for task in self.window.model.pending_tasks], ids)
+        self.assertEqual(self.window.model.current_id, ids[0])
+        self.assertEqual(self.window.model.seconds(), 1400)
+        self.assertFalse(self.window.model.running())
+
+    def test_undo_during_new_running_focus_preserves_new_current_timer(self):
+        first, second = [task['id'] for task in self.window.model.pending_tasks[:2]]
+        self.window.complete_task(first, True)
+        self.assertEqual(self.window.model.current_id, second)
+        self.window.toggle_timer()
+        self.assertTrue(self.window.model.running())
+        deadline = self.window.model.deadline
+        self.window.undo_delete()
+        self.assertEqual(self.window.model.current_id, second)
+        self.assertEqual(self.window.model.deadline, deadline)
+        self.assertTrue(self.window.model.running())
+        self.assertEqual(self.window.model.pending_tasks[0]['id'], first)
+
+    def test_five_twenty_and_fifty_tasks_keep_window_fixed_and_scroll(self):
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+        initial_size = self.window.get_size()
+        for count in (5, 20, 50):
+            with self.subTest(task_count=count):
+                self.window.model.tasks = []
+                self.window.model.current_id = None
+                for index in range(count):
+                    self.window.model.add(f'长清单任务 {index:02d}')
+                self.window.model.current_id = self.window.model.pending_tasks[0]['id']
+                self.window.refresh_tasks()
+                while Gtk.events_pending():
+                    Gtk.main_iteration_do(False)
+                self.assertEqual(len(self.window.rows_box.get_children()), count)
+                self.assertEqual(self.window.get_size(), initial_size)
+                if count >= 20:
+                    deadline = time.monotonic() + 1.0
+                    adjustment = self.window.scroller.get_vadjustment()
+                    while (adjustment.get_upper() <= adjustment.get_page_size()
+                           and time.monotonic() < deadline):
+                        while Gtk.events_pending():
+                            Gtk.main_iteration_do(False)
+                        time.sleep(0.01)
+                    self.assertGreater(adjustment.get_upper(), adjustment.get_page_size())
+
