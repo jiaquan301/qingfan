@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'application/qingfan_controller.dart';
-import 'domain/focus_engine.dart';
 import 'infrastructure/local_store.dart';
 import 'infrastructure/window_bridge.dart';
 import 'presentation/crystal_clock.dart';
