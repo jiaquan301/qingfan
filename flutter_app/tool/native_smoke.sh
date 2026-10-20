@@ -96,7 +96,10 @@ if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
   for scene in full mini; do
     corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{2,2}.r)]' info:)"
     echo "NATIVE_ALPHA_CORNER $scene red=$corner"
-    [[ "$corner" -lt 125 ]] ||
+    # Xvfb+picom composites a transparent pixel against its own gray
+    # backing (about 128), not necessarily the xsetroot wallpaper color.
+    # Opaque Qingfan fallback corners are about 245 and MUST fail.
+    [[ "$corner" -ge 60 && "$corner" -lt 190 ]] ||
       { echo "NATIVE_ALPHA_CORNER_OPAQUE $scene red=$corner" >&2; exit 1; }
   done
   echo 'NATIVE_ROUND_WINDOW_ALPHA_PASS'
