@@ -77,6 +77,28 @@ def capture(window, name):
     print(f'VISUAL_{name.upper()}_BEGIN:{base64.b64encode(raw).decode("ascii")}:VISUAL_{name.upper()}_END', flush=True)
 
 
+def assert_task_footer_visible(window):
+    drain()
+    width, height = window.get_size()
+    button = window.task_primary_button
+    pos = button.translate_coordinates(window, 0, 0)
+    allocated = button.get_allocation()
+    panel = window.task_panel
+    inside = panel.get_children()[-1]
+    scroller = window.scroller
+    print('TASK_ALLOCATIONS', {
+        'window': (width, height),
+        'panel': (panel.get_allocated_width(), panel.get_allocated_height()),
+        'inside': (inside.get_allocated_width(), inside.get_allocated_height()),
+        'scroller': (scroller.get_allocated_width(), scroller.get_allocated_height()),
+        'button': (pos, allocated.width, allocated.height),
+    }, flush=True)
+    if pos is None or pos[1] < 0 or pos[1] + allocated.height + 6 > height:
+        raise RuntimeError(
+            f'Task primary button clipped by window: {pos}, '
+            f'button height={allocated.height}, window height={height}')
+
+
 def main():
     app = Application()
     if not app.register(None):
@@ -94,6 +116,7 @@ def main():
     w.orb_window.open_tasks()
     drain()
     capture(w, 'tasks')
+    assert_task_footer_visible(w)
 
     # Keep a real 50-task fixture in visual evidence: the manager must remain
     # the same size and expose a working internal scrollbar.
@@ -105,6 +128,7 @@ def main():
     if adjustment.get_upper() <= adjustment.get_page_size():
         raise RuntimeError('50-task list did not activate its internal scrollbar')
     capture(w, 'long_tasks')
+    assert_task_footer_visible(w)
     w.destroy()
 
 
