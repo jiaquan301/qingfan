@@ -73,6 +73,7 @@ jobs:
           if-no-files-found: warn
 
   windows:
+    if: github.event_name == 'workflow_dispatch'
     name: Windows portable release build
     runs-on: windows-latest
     timeout-minutes: 35
@@ -125,6 +126,7 @@ jobs:
           if-no-files-found: error
 
   macos:
+    if: github.event_name == 'workflow_dispatch'
     name: macOS app bundle build
     runs-on: macos-15
     timeout-minutes: 40
