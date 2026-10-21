@@ -129,12 +129,12 @@ grep -q 'QINGFAN_ALREADY_RUNNING' native-second-instance.log ||
   { cat native-second-instance.log >&2; echo "SECOND_INSTANCE_LOCK_FAILED" >&2; exit 1; }
 echo 'NATIVE_SINGLE_INSTANCE_PASS'
 grep -q 'NATIVE_SMOKE_PASS' native-smoke.log
-for scene in full mini full_return tasks close_tasks; do
+for scene in full menu mini full_return tasks tasks_50 settings close_tasks; do
   grep -q "NATIVE_SMOKE_SIZE $scene:" native-smoke.log ||
     { echo "Missing native geometry check: $scene" >&2; exit 1; }
 done
 if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
-  for scene in full mini full_return tasks close_tasks; do
+  for scene in full menu mini full_return tasks tasks_50 settings close_tasks; do
     direct="native-shots/$scene.png"
     root="native-shots/$scene-root.png"
     [[ -s "$direct" && -s "$root" ]] ||
@@ -168,6 +168,13 @@ if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
   [[ "$tasks_corner" -gt 185 ]] ||
     { echo "NATIVE_TASK_WORKSPACE_BLACK_BACKGROUND red=$tasks_corner" >&2; exit 1; }
   echo 'NATIVE_TASK_WORKSPACE_SURFACE_PASS'
+  for scene in tasks_50 settings; do
+    corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{15,15}.r)]' info:)"
+    echo "NATIVE_PANEL_CORNER $scene red=$corner"
+    [[ "$corner" -gt 185 ]] ||
+      { echo "NATIVE_PANEL_BLACK_BACKGROUND $scene red=$corner" >&2; exit 1; }
+  done
+  echo 'NATIVE_SETTINGS_AND_LONG_LIST_SURFACE_PASS'
 fi
 max_count="$(sort -nr "$seen_file" | head -1)"
 echo "NATIVE_SMOKE_MAX_WINDOWS=$max_count"
