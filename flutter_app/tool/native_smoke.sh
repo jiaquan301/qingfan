@@ -147,6 +147,14 @@ if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
       { echo "NATIVE_SCREENSHOT_BLANK $scene direct=$direct_entropy root=$root_entropy" >&2; exit 1; }
   done
   echo 'NATIVE_VISUAL_CONTENT_PASS'
+  menu_changed="$(compare -metric AE native-shots/full-root.png native-shots/menu-root.png null: 2>&1 || true)"
+  menu_changed="${menu_changed%% *}"
+  echo "NATIVE_MENU_CHANGED_PIXELS=${menu_changed}"
+  # A tooltip changes ~2,000 pixels, whereas the compact 3-row menu
+  # must change substantially more. The route alone is insufficient.
+  [[ "$menu_changed" =~ ^[0-9]+$ ]] && (( menu_changed > 7000 )) ||
+    { echo "NATIVE_MENU_NOT_RENDERED" >&2; exit 1; }
+  echo 'NATIVE_MORE_MENU_RENDER_PASS'
   # Root framebuffer captures the composited display: at the round clock's
   # top-left corner we must see the dark desktop, not an opaque application
   # rectangle. Require both full and mini clocks to pass the alpha test.
