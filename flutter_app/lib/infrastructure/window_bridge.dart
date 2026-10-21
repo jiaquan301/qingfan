@@ -9,7 +9,8 @@ import '../application/qingfan_controller.dart';
 class DesktopWindowBridge {
   static const fullSize = Size(376, 408);
   static const miniSize = Size(104, 104);
-  static const panelSize = Size(768, 540);
+  // 304px clock rail (280px dial) + 410px focused task/settings workspace.
+  static const panelSize = Size(714, 510);
 
   bool get likelyWayland =>
       Platform.isLinux &&
