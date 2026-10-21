@@ -145,10 +145,7 @@ Future<void> _nativeSmoke(
   }
 
   try {
-    controller.setAlwaysOnTop(true);
-    await bridge.applyTopmost(controller);
     await check('full', DesktopWindowBridge.fullSize);
-    await checkTopmost('full');
     if (Platform.isLinux &&
         Platform.environment['QINGFAN_NATIVE_CAPTURE'] == '1') {
       final appState = _nativeAppKey.currentState;
@@ -162,10 +159,12 @@ Future<void> _nativeSmoke(
       }
       stdout.writeln('NATIVE_MORE_MENU_ROUTE_VISIBLE');
       await check('menu', DesktopWindowBridge.fullSize);
-      await checkTopmost('menu');
       appState._navigatorKey.currentState?.pop();
       await Future<void>.delayed(const Duration(milliseconds: 160));
     }
+    controller.setAlwaysOnTop(true);
+    await bridge.applyTopmost(controller);
+    await checkTopmost('full');
     if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
       stdout.writeln('NATIVE_DRAG_READY full');
       await Future<void>.delayed(const Duration(seconds: 5));
