@@ -56,14 +56,36 @@ jobs:
       - name: Debian installer candidate
         working-directory: flutter_app
         run: bash tool/package_linux.sh
-      - name: Verify Debian package install and uninstall
+      - name: Verify Debian package install, launch and uninstall
         working-directory: flutter_app
         run: |
           sudo apt-get install -y ./dist/*.deb
           test -x /usr/lib/qingfan/qingfan
           test -f /usr/share/applications/qingfan.desktop
+          tmp_home="$(mktemp -d)"
+          trap 'rm -rf "$tmp_home"' EXIT
+          export HOME="$tmp_home"
+          export XDG_DATA_HOME="$tmp_home/.local/share"
+          export XDG_CONFIG_HOME="$tmp_home/.config"
+          export XDG_CACHE_HOME="$tmp_home/.cache"
+          mkdir -p "$XDG_DATA_HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME"
+          timeout 35s dbus-run-session -- xvfb-run -a bash -euo pipefail -c '
+            openbox >/tmp/qingfan-installed-openbox.log 2>&1 &
+            openbox_pid=$!
+            picom --backend xrender --config /dev/null >/tmp/qingfan-installed-picom.log 2>&1 &
+            picom_pid=$!
+            trap "kill $openbox_pid $picom_pid 2>/dev/null || true" EXIT
+            sleep 1
+            timeout 30s /usr/lib/qingfan/qingfan --native-smoke 2>&1 | tee /tmp/qingfan-installed-smoke.log
+            grep -q "NATIVE_TOPMOST_SURFACE settings reported=true" /tmp/qingfan-installed-smoke.log
+            grep -q "NATIVE_TOPMOST_RESET reported=false" /tmp/qingfan-installed-smoke.log
+            grep -q "NATIVE_SMOKE_TOPMOST_ALL_SURFACES_PASS" /tmp/qingfan-installed-smoke.log
+            grep -q "NATIVE_SMOKE_PASS" /tmp/qingfan-installed-smoke.log
+          '
+          cp /tmp/qingfan-installed-smoke.log package-smoke.log
           sudo apt-get remove -y qingfan
           test ! -e /usr/lib/qingfan/qingfan
+          echo "LINUX_DEB_INSTALL_LAUNCH_UNINSTALL_PASS"
       - name: Save Linux deb and native evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,6 +95,7 @@ jobs:
             flutter_app/dist/*.deb
             flutter_app/pubspec.lock
             flutter_app/native-smoke.log
+            flutter_app/package-smoke.log
             flutter_app/native-shots/*.png
           if-no-files-found: warn
 
