@@ -372,10 +372,7 @@ class _QingfanAppState extends State<QingfanApp> {
                 // Expanded task/settings workspaces are intentionally opaque.
                 // A transparent GTK window behind them would show as a
                 // large black rectangle on non-compositing Linux desktops.
-                backgroundColor: open ||
-                        widget.bridge.likelyWayland
-                    ? QStyle.canvas
-                    : Colors.transparent,
+                backgroundColor: open ? QStyle.canvas : Colors.transparent,
                 body: Stack(
                   fit: StackFit.expand,
                   children: [
