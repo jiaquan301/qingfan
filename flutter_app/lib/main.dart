@@ -12,6 +12,9 @@ import 'infrastructure/local_store.dart';
 import 'infrastructure/window_bridge.dart';
 import 'presentation/crystal_clock.dart';
 import 'presentation/task_drawer.dart';
+import 'presentation/settings_pane.dart';
+import 'presentation/q_style.dart';
+import 'presentation/q_dialogs.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -228,30 +231,24 @@ class _QingfanAppState extends State<QingfanApp> {
       position: const RelativeRect.fromLTRB(150, 255, 55, 65),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: const Color(0xFFF9FBF8),
+      constraints: const BoxConstraints(minWidth: 196, maxWidth: 218),
       items: [
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'settings',
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.tune_rounded, size: 18),
-            title: Text('偏好设置'),
-          ),
+          height: 42,
+          child: _smallMenuItem(Icons.tune_rounded, '偏好设置'),
         ),
-        const PopupMenuItem<String>(
+        PopupMenuItem<String>(
           value: 'reset',
-          child: ListTile(
-            dense: true,
-            leading: Icon(Icons.restart_alt_rounded, size: 18),
-            title: Text('重新开始本轮'),
-          ),
+          height: 42,
+          child: _smallMenuItem(Icons.restart_alt_rounded, '重新开始本轮'),
         ),
         PopupMenuItem<String>(
           value: 'pin',
-          child: ListTile(
-            dense: true,
-            leading: Icon(c.alwaysOnTop
-                ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 18),
-            title: Text(c.alwaysOnTop ? '取消置顶' : '始终置顶'),
+          height: 42,
+          child: _smallMenuItem(
+            c.alwaysOnTop ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+            c.alwaysOnTop ? '取消置顶' : '始终置顶',
           ),
         ),
       ],
@@ -270,6 +267,14 @@ class _QingfanAppState extends State<QingfanApp> {
         break;
     }
   }
+
+  Widget _smallMenuItem(IconData icon, String label) => Row(
+        children: [
+          Icon(icon, size: 17, color: QStyle.jade),
+          const SizedBox(width: 12),
+          Text(label, style: QStyle.section),
+        ],
+      );
 
   void _closePanel() {
     _surface(c.closePanel);
@@ -305,22 +310,11 @@ class _QingfanAppState extends State<QingfanApp> {
     }
     final navigatorContext = _navigatorKey.currentState?.overlay?.context;
     if (navigatorContext == null) return;
-    final accepted = await showDialog<bool>(
-      context: navigatorContext,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('重新开始这一轮？'),
-        content: const Text('未完成的专注时间会清零，已经获得的番茄次数不会改变。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('重置'),
-          ),
-        ],
-      ),
+    final accepted = await QDialogs.confirm(
+      navigatorContext,
+      title: '重新开始这一轮？',
+      description: '未完成的专注时间将清零；已完成的番茄不会改变。',
+      action: '重新开始',
     );
     if (accepted == true) c.resetFocus();
   }
@@ -331,12 +325,7 @@ class _QingfanAppState extends State<QingfanApp> {
       navigatorKey: _navigatorKey,
       title: '青番',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.transparent,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF337259)),
-        fontFamily: null,
-      ),
+      theme: QStyle.theme(),
       home: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.space): _spaceShortcut,
@@ -356,7 +345,7 @@ class _QingfanAppState extends State<QingfanApp> {
                 // large black rectangle on non-compositing Linux desktops.
                 backgroundColor: open ||
                         widget.bridge.likelyWayland
-                    ? const Color(0xFFF8FAF7)
+                    ? QStyle.canvas
                     : Colors.transparent,
                 body: Stack(
                   fit: StackFit.expand,
@@ -375,12 +364,12 @@ class _QingfanAppState extends State<QingfanApp> {
                       Row(
                         children: [
                           Container(
-                            width: 330,
+                            width: 304,
                             decoration: const BoxDecoration(
-                              color: Color(0xFFF3F7F2),
+                              color: QStyle.panel,
                               border: Border(
                                 right: BorderSide(
-                                  color: Color(0xFFE5EDE6), width: 1,
+                                  color: QStyle.line, width: 1,
                                 ),
                               ),
                             ),
@@ -401,13 +390,9 @@ class _QingfanAppState extends State<QingfanApp> {
                                     onClose: _closePanel,
                                     onStart: _startFromTasks,
                                   )
-                                : _SettingsPane(
+                                : SettingsPane(
                                     controller: c,
                                     onClose: _closePanel,
-                                    onPin: (value) async {
-                                      c.setAlwaysOnTop(value);
-                                      await widget.bridge.applyTopmost(c);
-                                    },
                                   ),
                           ),
                         ],
@@ -450,91 +435,3 @@ class _QingfanAppState extends State<QingfanApp> {
   }
 }
 
-class _SettingsPane extends StatefulWidget {
-  const _SettingsPane({
-    required this.controller,
-    required this.onClose,
-    required this.onPin,
-  });
-
-  final QingfanController controller;
-  final VoidCallback onClose;
-  final ValueChanged<bool> onPin;
-
-  @override
-  State<_SettingsPane> createState() => _SettingsPaneState();
-}
-
-class _SettingsPaneState extends State<_SettingsPane> {
-  late double _focus = widget.controller.engine.focusMinutes.toDouble();
-  late double _short = widget.controller.engine.shortBreakMinutes.toDouble();
-  late double _long = widget.controller.engine.longBreakMinutes.toDouble();
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.controller;
-    return Material(
-      color: const Color(0xFFF9FCFA),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: ListView(children: [
-          Row(children: [
-            const Text('专注设置',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            const Spacer(),
-            IconButton(
-              tooltip: '关闭设置',
-              onPressed: widget.onClose,
-              icon: const Icon(Icons.close_rounded),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          _duration('专注时间', _focus, (v) => setState(() => _focus = v)),
-          _duration('短休息', _short, (v) => setState(() => _short = v)),
-          _duration('长休息', _long, (v) => setState(() => _long = v)),
-          const Divider(),
-          ListTile(
-            title: const Text('玻璃背景透明度'),
-            subtitle: Slider(
-              value: c.glassOpacity,
-              min: .7,
-              max: 1,
-              divisions: 6,
-              label: '${(c.glassOpacity * 100).round()}%',
-              onChanged: c.setOpacity,
-            ),
-            trailing: Text('${(c.glassOpacity * 100).round()}%'),
-          ),
-          SwitchListTile(
-            title: const Text('始终置顶'),
-            value: c.alwaysOnTop,
-            onChanged: widget.onPin,
-          ),
-          if (c.topmostCapabilityLimited)
-            const Text('当前 Linux Wayland 桌面可能不支持强制置顶。',
-                style: TextStyle(color: Color(0xFF8A663B))),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () {
-              c.configureTimes(_focus.round(), _short.round(), _long.round());
-              widget.onClose();
-            },
-            child: const Text('保存并返回时钟'),
-          ),
-        ]),
-      ),
-    );
-  }
-
-  Widget _duration(String title, double value, ValueChanged<double> change) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('$title  ${value.round()} 分钟'),
-        Slider(
-          value: value,
-          min: 1,
-          max: 180,
-          divisions: 179,
-          onChanged: change,
-        ),
-      ]);
-}
