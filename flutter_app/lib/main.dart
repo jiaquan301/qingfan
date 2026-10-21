@@ -195,10 +195,8 @@ Future<void> _nativeSmoke(
     // disposal. Do NOT call exit() during that process: it races engine
     // destruction and crashes Linux with FlutterEngineRemoveView.
     await bridge.close();
-    await Future<void>.delayed(const Duration(seconds: 2));
-    stdout.writeln('NATIVE_SMOKE_GRACEFUL_CLOSE_PASS');
-    // The native GTK process should exit on its own when its only window
-    // closes. If it stays running the external timeout correctly fails CI.
+    // Closing the only GTK window ends the process. The shell harness verifies
+    // its exit status; do not emit a post-close marker from the destroyed view.
   } catch (error, trace) {
     stderr.writeln('NATIVE_SMOKE_FAIL: $error\n$trace');
     exitCode = 1;
