@@ -276,15 +276,18 @@ class _TaskDrawerState extends State<TaskDrawer> {
                                     style: const TextStyle(fontSize: 11)),
                               ),
                             if (query.isEmpty)
-                              ReorderableDragStartListener(
-                                index: index,
-                                child: const Padding(
-                                  padding: EdgeInsets.all(8),
-                                  child: Icon(Icons.drag_indicator,
-                                      color: Color(0x88809A8B), size: 16),
+                              _QuietHoverAction(
+                                child: ReorderableDragStartListener(
+                                  index: index,
+                                  child: const Padding(
+                                    padding: EdgeInsets.all(8),
+                                    child: Icon(Icons.drag_indicator,
+                                        color: QStyle.secondary, size: 16),
+                                  ),
                                 ),
                               ),
-                            PopupMenuButton<String>(
+                            _QuietHoverAction(
+                              child: PopupMenuButton<String>(
                               tooltip: '任务操作',
                               icon: const Icon(Icons.more_horiz, size: 18, color: QStyle.secondary),
                               constraints: const BoxConstraints(minWidth: 110, maxWidth: 148),
@@ -298,6 +301,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
                                 PopupMenuItem(height: 38, value: 'rename', child: Text('重命名')),
                                 PopupMenuItem(height: 38, value: 'delete', child: Text('删除')),
                               ],
+                              ),
                             ),
                             ]),
                           ),
@@ -380,4 +384,27 @@ class _TaskDrawerState extends State<TaskDrawer> {
     }
     c.deleteTask(task.id, discardPartial: true);
   }
+}
+
+class _QuietHoverAction extends StatefulWidget {
+  const _QuietHoverAction({required this.child});
+  final Widget child;
+
+  @override
+  State<_QuietHoverAction> createState() => _QuietHoverActionState();
+}
+
+class _QuietHoverActionState extends State<_QuietHoverAction> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedOpacity(
+          opacity: _hovered ? 1 : .58,
+          duration: const Duration(milliseconds: 130),
+          child: widget.child,
+        ),
+      );
 }
