@@ -176,6 +176,52 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('Full, mini, tasks and settings fit at 100/125/150/200% display scales',
+      (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final scale in [1.0, 1.25, 1.5, 2.0]) {
+      tester.view.devicePixelRatio = scale;
+      tester.view.physicalSize = Size(376 * scale, 408 * scale);
+
+      final c = QingfanController();
+      for (var i = 0; i < 50; i++) {
+        c.addTask('缩放验收任务 ${i + 1}');
+      }
+
+      await tester.pumpWidget(
+        QingfanApp(controller: c, bridge: DesktopWindowBridge()),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('25:00'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'full clock at $scale');
+
+      c.setMode(ClockMode.mini);
+      tester.view.physicalSize = Size(104 * scale, 104 * scale);
+      await tester.pumpAndSettle();
+      expect(find.text('25:00'), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'mini clock at $scale');
+
+      c.openPanel(OpenPanel.tasks);
+      tester.view.physicalSize = Size(714 * scale, 510 * scale);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('taskScroll')), findsOneWidget);
+      final action = find.byKey(const Key('drawerStartFocus'));
+      expect(tester.getRect(action).bottom, lessThanOrEqualTo(510));
+      expect(tester.takeException(), isNull, reason: 'tasks at $scale');
+
+      c.openPanel(OpenPanel.settings);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('durationInput2')), findsOneWidget);
+      expect(find.byKey(const Key('glassOpacity')), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'settings at $scale');
+
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    }
+  });
+
   testWidgets('Space typed inside task input must not toggle focus', (tester) async {
     final c = QingfanController();
     c.openPanel(OpenPanel.tasks);
@@ -190,7 +236,7 @@ void main() {
     c.dispose();
   });
 
-  testWidgets('5, 20 and 50 tasks keep the primary action fixed and reachable',
+  testWidgets('0, 5, 20 and 50 tasks keep the primary action fixed and reachable',
       (tester) async {
     for (final count in [0, 5, 20, 50]) {
       final c = QingfanController();
@@ -201,8 +247,8 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SizedBox(
-            width: 450,
-            height: 540,
+            width: 410,
+            height: 510,
             child: TaskDrawer(
               controller: c,
               onClose: () {},
@@ -216,8 +262,9 @@ void main() {
       final action = find.byKey(const Key('drawerStartFocus'));
       expect(action, findsOneWidget);
       final initialRect = tester.getRect(action);
-      expect(initialRect.bottom, lessThanOrEqualTo(540));
+      expect(initialRect.bottom, lessThanOrEqualTo(510));
       expect(initialRect.top, greaterThanOrEqualTo(0));
+      expect(tester.takeException(), isNull);
 
       if (count == 50) {
         await tester.scrollUntilVisible(
