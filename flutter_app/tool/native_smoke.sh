@@ -33,6 +33,9 @@ trap 'rm -f "$seen_file"; cleanup' EXIT
   done
 ) &
 watch_pid=$!
+# Keep the initial screenshot free of the desktop's default pointer tooltip.
+# The app window opens centered, while this pointer position stays outside it.
+xdotool mousemove 10 10
 # Launch a second instance while the main native window is alive. It must
 # detect the held OS lock, return immediately, and never create another view.
 QINGFAN_NATIVE_SMOKE=1 QINGFAN_NATIVE_DRAG=1 timeout 55s "$app" >native-smoke.log 2>&1 &
@@ -123,6 +126,7 @@ if [[ "$status" -ne 0 ]]; then
   echo "NATIVE_SMOKE_FAILED exit=$status" >&2
   exit "$status"
 fi
+echo 'NATIVE_SMOKE_EXIT_STATUS_PASS'
 [[ "$second_status" -eq 0 ]] ||
   { cat native-second-instance.log >&2; echo "SECOND_INSTANCE_FAILED" >&2; exit 1; }
 grep -q 'QINGFAN_ALREADY_RUNNING' native-second-instance.log ||
