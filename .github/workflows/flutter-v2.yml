@@ -38,6 +38,9 @@ jobs:
           flutter create --no-pub --project-name qingfan --platforms=linux,windows,macos .
           python3 tool/patch_linux_runner.py
           flutter pub get
+      - name: Verify committed dependency lock is reproducible
+        working-directory: flutter_app
+        run: git diff --exit-code -- pubspec.lock
       - name: Static analysis
         working-directory: flutter_app
         run: flutter analyze --no-pub
