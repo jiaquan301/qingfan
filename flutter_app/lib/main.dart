@@ -134,8 +134,21 @@ Future<void> _nativeSmoke(
     }
   }
 
+  Future<void> checkTopmost(String surface) async {
+    if (!Platform.isLinux || bridge.likelyWayland) return;
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    final reported = await windowManager.isAlwaysOnTop();
+    stdout.writeln('NATIVE_TOPMOST_SURFACE $surface reported=$reported');
+    if (!reported) {
+      throw StateError('$surface lost the always-on-top state');
+    }
+  }
+
   try {
+    controller.setAlwaysOnTop(true);
+    await bridge.applyTopmost(controller);
     await check('full', DesktopWindowBridge.fullSize);
+    await checkTopmost('full');
     if (Platform.isLinux &&
         Platform.environment['QINGFAN_NATIVE_CAPTURE'] == '1') {
       final appState = _nativeAppKey.currentState;
@@ -149,6 +162,7 @@ Future<void> _nativeSmoke(
       }
       stdout.writeln('NATIVE_MORE_MENU_ROUTE_VISIBLE');
       await check('menu', DesktopWindowBridge.fullSize);
+      await checkTopmost('menu');
       appState._navigatorKey.currentState?.pop();
       await Future<void>.delayed(const Duration(milliseconds: 160));
     }
@@ -159,6 +173,7 @@ Future<void> _nativeSmoke(
     controller.setMode(ClockMode.mini);
     await bridge.setSurface(controller);
     await check('mini', DesktopWindowBridge.miniSize);
+    await checkTopmost('mini');
     if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
       stdout.writeln('NATIVE_DRAG_READY mini');
       await Future<void>.delayed(const Duration(seconds: 5));
@@ -166,29 +181,33 @@ Future<void> _nativeSmoke(
     controller.setMode(ClockMode.full);
     await bridge.setSurface(controller);
     await check('full_return', DesktopWindowBridge.fullSize);
+    await checkTopmost('full_return');
     controller.openPanel(OpenPanel.tasks);
     await bridge.setSurface(controller);
     await check('tasks', DesktopWindowBridge.panelSize);
+    await checkTopmost('tasks');
     for (var i = 0; i < 50; i++) {
       controller.addTask('界面验收任务 ${i + 1}');
     }
     await check('tasks_50', DesktopWindowBridge.panelSize);
+    await checkTopmost('tasks_50');
     controller.openPanel(OpenPanel.settings);
     await bridge.setSurface(controller);
     await check('settings', DesktopWindowBridge.panelSize);
+    await checkTopmost('settings');
     controller.closePanel();
     await bridge.setSurface(controller);
     await check('close_tasks', DesktopWindowBridge.fullSize);
-    controller.setAlwaysOnTop(true);
-    await bridge.applyTopmost(controller);
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    final reportedTop = await windowManager.isAlwaysOnTop();
-    stdout.writeln('NATIVE_SMOKE_TOPMOST reported=$reportedTop');
-    if (!bridge.likelyWayland && !reportedTop) {
-      throw StateError('X11 or desktop runner refused always-on-top');
-    }
+    await checkTopmost('close_tasks');
     controller.setAlwaysOnTop(false);
     await bridge.applyTopmost(controller);
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    final clearedTop = await windowManager.isAlwaysOnTop();
+    stdout.writeln('NATIVE_TOPMOST_RESET reported=$clearedTop');
+    if (!bridge.likelyWayland && clearedTop) {
+      throw StateError('X11 failed to clear the always-on-top state');
+    }
+    stdout.writeln('NATIVE_SMOKE_TOPMOST_ALL_SURFACES_PASS');
     stdout.writeln('NATIVE_SMOKE_PASS single-runner full mini panel topmost');
     await controller.flush();
     // Closing the native Flutter view invokes asynchronous GTK/engine
