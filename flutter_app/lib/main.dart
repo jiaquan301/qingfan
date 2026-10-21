@@ -141,6 +141,13 @@ Future<void> _nativeSmoke(
       final appState = _nativeAppKey.currentState;
       if (appState == null) throw StateError('Missing Flutter app state for menu');
       unawaited(appState._showMoreMenu());
+      // A menu route can exist before the Linux software renderer has
+      // composed it. Wait for the route and allow a complete frame.
+      await Future<void>.delayed(const Duration(milliseconds: 1400));
+      if (appState._navigatorKey.currentState?.canPop() != true) {
+        throw StateError('Native more-menu route was not presented');
+      }
+      stdout.writeln('NATIVE_MORE_MENU_ROUTE_VISIBLE');
       await check('menu', DesktopWindowBridge.fullSize);
       appState._navigatorKey.currentState?.pop();
       await Future<void>.delayed(const Duration(milliseconds: 160));
