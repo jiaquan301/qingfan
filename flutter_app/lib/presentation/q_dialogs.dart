@@ -35,23 +35,54 @@ abstract final class QDialogs {
   static Future<String?> rename(
     BuildContext context, {
     required String current,
-  }) async {
-    final field = TextEditingController(text: current);
-    final result = await showDialog<String>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: .20),
-      builder: (dialogContext) => _QDialogShell(
+  }) =>
+      showDialog<String>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: .20),
+        builder: (_) => _QRenameDialog(current: current),
+      );
+}
+
+class _QRenameDialog extends StatefulWidget {
+  const _QRenameDialog({required this.current});
+  final String current;
+
+  @override
+  State<_QRenameDialog> createState() => _QRenameDialogState();
+}
+
+class _QRenameDialogState extends State<_QRenameDialog> {
+  late final TextEditingController _field;
+
+  @override
+  void initState() {
+    super.initState();
+    _field = TextEditingController(text: widget.current);
+  }
+
+  @override
+  void dispose() {
+    // Owned by the dialog route; dispose only once its exit animation and
+    // TextField subtree have actually unmounted.
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final value = _field.text.trim();
+    if (value.isNotEmpty) Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) => _QDialogShell(
         title: '重命名任务',
         content: TextField(
           key: const Key('renameTaskInput'),
-          controller: field,
+          controller: _field,
           autofocus: true,
           maxLength: 120,
           textInputAction: TextInputAction.done,
-          onSubmitted: (text) {
-            final name = text.trim();
-            if (name.isNotEmpty) Navigator.pop(dialogContext, name);
-          },
+          onSubmitted: (_) => _save(),
           decoration: const InputDecoration(
             hintText: '任务名称',
             counterText: '',
@@ -60,23 +91,17 @@ abstract final class QDialogs {
         actions: [
           _QDialogAction(
             text: '取消',
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () => Navigator.pop(context),
           ),
           _QDialogAction(
             text: '保存',
             primary: true,
-            onPressed: () {
-              final name = field.text.trim();
-              if (name.isNotEmpty) Navigator.pop(dialogContext, name);
-            },
+            onPressed: _save,
           ),
         ],
-      ),
-    );
-    field.dispose();
-    return result;
-  }
+      );
 }
+
 
 class _QDialogShell extends StatelessWidget {
   const _QDialogShell({
