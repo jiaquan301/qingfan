@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../application/qingfan_controller.dart';
 import '../domain/focus_engine.dart';
+import 'q_dialogs.dart';
+import 'q_style.dart';
 
 class TaskDrawer extends StatefulWidget {
   const TaskDrawer({
@@ -22,9 +26,12 @@ class _TaskDrawerState extends State<TaskDrawer> {
   final TextEditingController _entry = TextEditingController();
   final TextEditingController _search = TextEditingController();
   bool _completedExpanded = false;
+  String? _temporaryMessage;
+  Timer? _messageTimer;
 
   @override
   void dispose() {
+    _messageTimer?.cancel();
     _entry.dispose();
     _search.dispose();
     super.dispose();
@@ -36,18 +43,12 @@ class _TaskDrawerState extends State<TaskDrawer> {
   }
 
   Future<bool> _confirmDiscard() async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('放弃当前未完成的专注？'),
-        content: const Text('切换或完成任务会重置本轮未完成的时间，已累计番茄不受影响。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('放弃本轮')),
-        ],
-      ),
+    return QDialogs.confirm(
+      context,
+      title: '放弃本轮专注？',
+      description: '这轮尚未完成的时间会清零，已经完成的番茄记录不受影响。',
+      action: '放弃本轮',
     );
-    return result == true;
   }
 
   Future<void> _select(QingfanTask task) async {
@@ -119,9 +120,11 @@ class _TaskDrawerState extends State<TaskDrawer> {
       );
 
   void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(text), duration: const Duration(seconds: 2)),
-    );
+    _messageTimer?.cancel();
+    setState(() => _temporaryMessage = text);
+    _messageTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _temporaryMessage = null);
+    });
   }
 
   @override
@@ -136,72 +139,44 @@ class _TaskDrawerState extends State<TaskDrawer> {
         .where((t) => t.title.toLowerCase().contains(query))
         .toList();
     return Material(
-      color: const Color(0xFFF9FCFA),
+      color: QStyle.canvas,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        padding: const EdgeInsets.fromLTRB(18, 15, 18, 15),
         child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(children: [
-            const Text('任务清单',
-                style: TextStyle(
-                    fontSize: 21, fontWeight: FontWeight.w600,
-                    color: Color(0xFF153E31))),
-            const SizedBox(width: 12),
-            Text('${allPending.length} 项待办',
-                style: const TextStyle(color: Color(0xFF81978B))),
-            const Spacer(),
-            IconButton(
-              tooltip: '关闭任务清单',
-              icon: const Icon(Icons.close_rounded),
-              onPressed: widget.onClose,
-            ),
-          ]),
-          const SizedBox(height: 12),
+          QPanelHeader(
+            title: '任务清单',
+            subtitle: '${allPending.length} 项待办',
+            onClose: widget.onClose,
+          ),
+          const SizedBox(height: 9),
           TextField(
             controller: _entry,
             key: const Key('newTask'),
             decoration: InputDecoration(
               hintText: '接下来要完成什么？',
-              prefixIcon: const Icon(Icons.add_task_rounded),
+              prefixIcon: const Icon(Icons.add_rounded, size: 18),
               suffixIcon: IconButton(
                 tooltip: '添加任务',
-                icon: const Icon(Icons.add_rounded),
+                icon: const Icon(Icons.arrow_upward_rounded, size: 17),
                 onPressed: _add,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(color: Color(0xFFDDE7DF)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(color: Color(0xFF709A84)),
               ),
               isDense: true,
             ),
+            style: QStyle.section,
             onSubmitted: (_) => _add(),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           TextField(
             key: const Key('taskSearch'),
             controller: _search,
             decoration: InputDecoration(
               hintText: '搜索任务',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-              fillColor: Colors.white,
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(color: Color(0xFFDDE7DF)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(color: Color(0xFF709A84)),
-              ),
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
               isDense: true,
             ),
+            style: QStyle.section,
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 8),
@@ -240,22 +215,26 @@ class _TaskDrawerState extends State<TaskDrawer> {
                         final active = task.id == c.selectedTaskId;
                         return Container(
                           key: ValueKey(task.id),
-                          margin: const EdgeInsets.symmetric(vertical: 2),
+                          margin: const EdgeInsets.symmetric(vertical: 1),
                           decoration: BoxDecoration(
                             color: active
-                                ? const Color(0xFFE8F3EB)
+                                ? QStyle.selected
                                 : Colors.transparent,
-                            borderRadius: BorderRadius.circular(13),
+                            borderRadius: BorderRadius.circular(10),
                             border: active
                                 ? const Border(
                                     left: BorderSide(
-                                      color: Color(0xFF337259), width: 3))
+                                      color: QStyle.jade, width: 2))
                                 : null,
                           ),
-                          child: Row(children: [
+                          child: SizedBox(
+                            height: 46,
+                            child: Row(children: [
                             Checkbox(
                               value: task.done,
                               semanticLabel: '标记任务完成',
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
                               onChanged: (_) => _toggleDone(task),
                             ),
                             Expanded(
@@ -270,15 +249,17 @@ class _TaskDrawerState extends State<TaskDrawer> {
                                   child: InkWell(
                                     onTap: () => _select(task),
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      padding: const EdgeInsets.symmetric(vertical: 9),
                                       child: Text(
                                         task.title,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                             fontWeight: active
-                                                ? FontWeight.w700
-                                                : FontWeight.w400),
+                                                ? FontWeight.w600
+                                                : FontWeight.w400,
+                                            fontSize: 13,
+                                            color: QStyle.ink),
                                       ),
                                     ),
                                   ),
@@ -287,7 +268,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
                             ),
                             if (active)
                               const Text('当前', style: TextStyle(
-                                  fontSize: 11, color: Color(0xFF337259))),
+                                  fontSize: 11, color: QStyle.jade)),
                             if (task.pomodoros > 0)
                               Padding(
                                 padding: const EdgeInsets.only(left: 8),
@@ -300,22 +281,26 @@ class _TaskDrawerState extends State<TaskDrawer> {
                                 child: const Padding(
                                   padding: EdgeInsets.all(8),
                                   child: Icon(Icons.drag_indicator,
-                                      color: Color(0xFF81978B), size: 18),
+                                      color: Color(0x88809A8B), size: 16),
                                 ),
                               ),
                             PopupMenuButton<String>(
                               tooltip: '任务操作',
-                              icon: const Icon(Icons.more_horiz),
+                              icon: const Icon(Icons.more_horiz, size: 18, color: QStyle.secondary),
+                              constraints: const BoxConstraints(minWidth: 110, maxWidth: 148),
+                              padding: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                               onSelected: (action) {
                                 if (action == 'rename') _rename(task);
                                 if (action == 'delete') _delete(task);
                               },
                               itemBuilder: (_) => const [
-                                PopupMenuItem(value: 'rename', child: Text('重命名')),
-                                PopupMenuItem(value: 'delete', child: Text('删除')),
+                                PopupMenuItem(height: 38, value: 'rename', child: Text('重命名')),
+                                PopupMenuItem(height: 38, value: 'delete', child: Text('删除')),
                               ],
                             ),
-                          ]),
+                            ]),
+                          ),
                         );
                       },
                     ),
@@ -346,8 +331,13 @@ class _TaskDrawerState extends State<TaskDrawer> {
               ),
             ),
           ),
+          if (_temporaryMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Text(_temporaryMessage!, style: QStyle.detail, maxLines: 1),
+            ),
           _undoBanner(),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           OutlinedButton.icon(
             key: const Key('drawerStartFocus'),
             onPressed: widget.onStart,
@@ -373,22 +363,7 @@ class _TaskDrawerState extends State<TaskDrawer> {
   }
 
   Future<void> _rename(QingfanTask task) async {
-    final field = TextEditingController(text: task.title);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('重命名任务'),
-        content: TextField(controller: field, autofocus: true),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, field.text.trim()),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    field.dispose();
+    final result = await QDialogs.rename(context, current: task.title);
     if (result != null) widget.controller.renameTask(task.id, result);
   }
 
