@@ -84,12 +84,18 @@ void main() {
     final a = QingfanController(store: store);
     a.addTask('测试任务');
     a.setOpacity(.85);
+    a.configureTimes(40, 8, 20);
+    a.setAlwaysOnTop(true);
     await a.flush();
     a.dispose();
     final b = QingfanController(store: store);
     await b.load();
     expect(b.tasks.single.title, '测试任务');
     expect(b.glassOpacity, .85);
+    expect(b.engine.focusMinutes, 40);
+    expect(b.engine.shortBreakMinutes, 8);
+    expect(b.engine.longBreakMinutes, 20);
+    expect(b.alwaysOnTop, isTrue);
     b.dispose();
   });
 
@@ -135,6 +141,41 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('Clock stays transparent while switching full, mini and panel modes', (tester) async {
+    final c = QingfanController();
+    await tester.pumpWidget(
+      QingfanApp(controller: c, bridge: DesktopWindowBridge()),
+    );
+    await tester.pump();
+
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      Colors.transparent,
+    );
+    c.setMode(ClockMode.mini);
+    await tester.pump();
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      Colors.transparent,
+    );
+
+    c.openPanel(OpenPanel.tasks);
+    await tester.pump();
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      isNot(Colors.transparent),
+    );
+
+    c.closePanel();
+    await tester.pump();
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+      Colors.transparent,
+    );
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
   testWidgets('Space typed inside task input must not toggle focus', (tester) async {
     final c = QingfanController();
     c.openPanel(OpenPanel.tasks);
@@ -151,7 +192,7 @@ void main() {
 
   testWidgets('5, 20 and 50 tasks keep the primary action fixed and reachable',
       (tester) async {
-    for (final count in [5, 20, 50]) {
+    for (final count in [0, 5, 20, 50]) {
       final c = QingfanController();
       for (var i = 0; i < count; i++) {
         c.addTask('任务 $i');
