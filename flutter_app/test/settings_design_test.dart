@@ -80,6 +80,35 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('Settings remain usable at 100 125 150 200 percent desktop DPI',
+      (tester) async {
+    for (final scale in [1.0, 1.25, 1.5, 2.0]) {
+      final c = QingfanController();
+      await tester.pumpWidget(MaterialApp(
+        theme: QStyle.theme(),
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: const Size(714, 510),
+            devicePixelRatio: scale,
+          ),
+          child: Scaffold(
+            body: SizedBox(
+              width: 410,
+              height: 510,
+              child: SettingsPane(controller: c, onClose: () {}),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('durationInput2')), findsOneWidget);
+      expect(find.byKey(const Key('glassOpacity')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    }
+  });
+
   testWidgets('Confirmation dialogs use shared porcelain layout, not AlertDialog',
       (tester) async {
     late BuildContext homeContext;
