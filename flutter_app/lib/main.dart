@@ -16,6 +16,8 @@ import 'presentation/settings_pane.dart';
 import 'presentation/q_style.dart';
 import 'presentation/q_dialogs.dart';
 
+final GlobalKey<_QingfanAppState> _nativeAppKey = GlobalKey<_QingfanAppState>();
+
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final instanceGuard = InstanceGuard();
@@ -39,7 +41,11 @@ Future<void> main(List<String> args) async {
   // A new app session opens in the full clock, irrespective of last size.
   // Only ONE GTK/native runner is ever created by this Flutter process.
   controller.setMode(ClockMode.full);
-  runApp(QingfanApp(controller: controller, bridge: bridge));
+  runApp(QingfanApp(
+    key: _nativeAppKey,
+    controller: controller,
+    bridge: bridge,
+  ));
   await bridge.showInitial(controller);
   if (args.contains('--native-smoke') ||
       Platform.environment['QINGFAN_NATIVE_SMOKE'] == '1') {
@@ -130,6 +136,15 @@ Future<void> _nativeSmoke(
 
   try {
     await check('full', DesktopWindowBridge.fullSize);
+    if (Platform.isLinux &&
+        Platform.environment['QINGFAN_NATIVE_CAPTURE'] == '1') {
+      final appState = _nativeAppKey.currentState;
+      if (appState == null) throw StateError('Missing Flutter app state for menu');
+      unawaited(appState._showMoreMenu());
+      await check('menu', DesktopWindowBridge.fullSize);
+      appState._navigatorKey.currentState?.pop();
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+    }
     if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
       stdout.writeln('NATIVE_DRAG_READY full');
       await Future<void>.delayed(const Duration(seconds: 5));
@@ -147,6 +162,13 @@ Future<void> _nativeSmoke(
     controller.openPanel(OpenPanel.tasks);
     await bridge.setSurface(controller);
     await check('tasks', DesktopWindowBridge.panelSize);
+    for (var i = 0; i < 50; i++) {
+      controller.addTask('界面验收任务 ${i + 1}');
+    }
+    await check('tasks_50', DesktopWindowBridge.panelSize);
+    controller.openPanel(OpenPanel.settings);
+    await bridge.setSurface(controller);
+    await check('settings', DesktopWindowBridge.panelSize);
     controller.closePanel();
     await bridge.setSurface(controller);
     await check('close_tasks', DesktopWindowBridge.fullSize);
