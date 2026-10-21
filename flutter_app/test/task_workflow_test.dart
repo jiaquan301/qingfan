@@ -134,6 +134,7 @@ void main() {
         ),
       ),
     ));
+    expect(find.text('已经完成甲'), findsNothing);
     await tester.enterText(find.byKey(const Key('taskSearch')), '完成甲');
     await tester.pumpAndSettle();
     expect(find.text('已经完成甲'), findsOneWidget);
