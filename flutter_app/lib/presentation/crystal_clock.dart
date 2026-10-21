@@ -117,12 +117,13 @@ class _CrystalClockState extends State<CrystalClock> {
                                 maxLines: 1,
                                 style: TextStyle(
                                   color: _ink,
-                                  fontSize: mini ? 19 : 62,
+                                  fontSize: mini ? 19 : 60,
                                   height: 1.03,
                                   letterSpacing: mini ? -.8 : -2.6,
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
                                   ],
+                                  fontFamily: 'Noto Sans',
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -135,7 +136,7 @@ class _CrystalClockState extends State<CrystalClock> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11.5,
                                       color: _accent,
                                       fontWeight: FontWeight.w500,
                                       letterSpacing: .3,
