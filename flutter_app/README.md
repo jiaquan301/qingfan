@@ -19,7 +19,7 @@ flutter build linux --release
 bash tool/package_linux.sh
 ```
 
-生成 `dist/qingfan_2.0.0~dev4_amd64.deb`；安装和卸载参见根目录 README。
+生成 `dist/qingfan_3.0.0~dev1_amd64.deb`；安装和卸载参见根目录 README。
 
 ## Windows 10/11 x64 源码编译
 
