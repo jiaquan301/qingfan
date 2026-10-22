@@ -63,6 +63,7 @@ if proc.returncode != 0:
 for marker in [
     "NATIVE_SMOKE_SIZE dial:",
     "NATIVE_SMOKE_SIZE dial_return:",
+    "NATIVE_SMOKE_SIZE menu:",
     "NATIVE_SMOKE_SIZE tasks:",
     "NATIVE_SMOKE_SIZE tasks_50:",
     "NATIVE_SMOKE_SIZE settings:",
