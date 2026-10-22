@@ -226,6 +226,30 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('Expanded More pane fits 104px dial and has no rest skip controls',
+      (tester) async {
+    final clock = _FakeClock();
+    final c = QingfanController(engine: FocusEngine(clock: clock, focusMinutes: 1));
+    c.openPanel(OpenPanel.menu);
+    await tester.pumpWidget(QingfanApp(controller: c, bridge: DesktopWindowBridge()));
+    await tester.pump();
+    expect(tester.getSize(find.byKey(const Key('singleDial'))),
+        const Size(104, 104));
+    expect(find.text('偏好设置'), findsOneWidget);
+    expect(find.text('重新开始本轮'), findsOneWidget);
+    expect(find.text('始终置顶'), findsOneWidget);
+    c.startFocus();
+    clock.advance(60000);
+    expect(c.engine.tick(), true);
+    await tester.pump();
+    expect(find.text('重新开始本轮'), findsNothing);
+    expect(find.textContaining('跳过休息'), findsNothing);
+    expect(find.text('偏好设置'), findsOneWidget);
+    expect(find.text('始终置顶'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
   test('Corrupt local JSON is quarantined rather than silently erased', () async {
     final directory = await Directory.systemTemp.createTemp('qingfan-corrupt-');
     addTearDown(() => directory.delete(recursive: true));
