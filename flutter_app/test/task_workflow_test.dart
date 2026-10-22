@@ -250,6 +250,28 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('Completed focus credits exactly once; automatic rest does not credit', (tester) async {
+    final clock = _FakeClock();
+    final c = QingfanController(
+      engine: FocusEngine(clock: clock, focusMinutes: 1, restMinutes: 1),
+    );
+    c.addTask('计数测试');
+    c.startFocus();
+    clock.advance(60000);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.engine.phase, FocusPhase.rest);
+    expect(c.selectedTask!.pomodoros, 1);
+    expect(c.engine.completedRounds, 1);
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(c.selectedTask!.pomodoros, 1);
+    clock.advance(60000);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.engine.phase, FocusPhase.focus);
+    expect(c.engine.runState, RunState.idle);
+    expect(c.selectedTask!.pomodoros, 1);
+    c.dispose();
+  });
+
   test('Corrupt local JSON is quarantined rather than silently erased', () async {
     final directory = await Directory.systemTemp.createTemp('qingfan-corrupt-');
     addTearDown(() => directory.delete(recursive: true));
