@@ -187,6 +187,7 @@ jobs:
             flutter_app/windows-native-smoke.log
             flutter_app/windows-native-stderr.log
             flutter_app/windows-native-desktop.png
+            flutter_app/windows-native-window.png
           if-no-files-found: warn
       - name: Windows portable artifact
         uses: actions/upload-artifact@v4
@@ -262,4 +263,6 @@ jobs:
             flutter_app/dist/*.dmg
             flutter_app/macos-native-smoke.log
             flutter_app/macos-native-desktop.png
+            flutter_app/macos-native-window.png
+            flutter_app/macos-window-inspection.log
           if-no-files-found: warn
