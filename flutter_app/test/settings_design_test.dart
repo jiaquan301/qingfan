@@ -27,7 +27,7 @@ void main() {
     expect(find.text('偏好设置'), findsOneWidget);
     expect(find.byKey(const Key('durationInput0')), findsOneWidget);
     expect(find.byKey(const Key('durationInput1')), findsOneWidget);
-    expect(find.byKey(const Key('durationInput2')), findsOneWidget);
+    expect(find.byKey(const Key('durationInput2')), findsNothing);
     expect(find.byKey(const Key('glassOpacity')), findsOneWidget);
     expect(find.text('始终置顶'), findsNothing);
     expect(find.text('保存并返回时钟'), findsNothing);
@@ -52,17 +52,12 @@ void main() {
     await tester.enterText(find.byKey(const Key('durationInput1')), '8');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(c.engine.shortBreakMinutes, 8);
-
-    await tester.enterText(find.byKey(const Key('durationInput2')), '999');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-    expect(c.engine.longBreakMinutes, 180);
+    expect(c.engine.restMinutes, 8);
 
     await tester.tap(find.byTooltip('返回时钟'));
     await tester.pump();
     expect(closes, 1);
-    expect(c.engine.shortBreakMinutes, 8);
+    expect(c.engine.restMinutes, 8);
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
@@ -100,7 +95,7 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('durationInput2')), findsOneWidget);
+      expect(find.byKey(const Key('durationInput2')), findsNothing);
       expect(find.byKey(const Key('glassOpacity')), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
