@@ -245,13 +245,27 @@ jobs:
       - name: Verify unsigned DMG can be mounted and unmounted
         working-directory: flutter_app
         run: |
-          volume="$RUNNER_TEMP/QingfanMount"
-          mkdir -p "$volume"
-          hdiutil attach dist/qingfan-v2-macos-unsigned.dmg -nobrowse -readonly -mountpoint "$volume"
-          trap 'hdiutil detach "$volume" -force || true' EXIT
+          volume="$(mktemp -d "$RUNNER_TEMP/QingfanMount.XXXXXX")"
+          mounted=0
+          cleanup() {
+            if [ "$mounted" = 1 ]; then hdiutil detach "$volume" -force || true; fi
+            rmdir "$volume" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          # macOS hosted runners occasionally return EAGAIN while DiskImages
+          # services initialize; bounded retries still fail on real errors.
+          for attempt in 1 2 3 4 5; do
+            if hdiutil attach dist/qingfan-v2-macos-unsigned.dmg -nobrowse -readonly -mountpoint "$volume"; then
+              mounted=1
+              break
+            fi
+            echo "DMG_ATTACH_RETRY=$attempt"
+            sleep 4
+          done
+          test "$mounted" = 1 || { echo "MACOS_DMG_ATTACH_FAILED"; exit 1; }
           test -x "$volume/qingfan.app/Contents/MacOS/qingfan"
           hdiutil detach "$volume"
-          trap - EXIT
+          mounted=0
           echo "MACOS_DMG_MOUNT_UNMOUNT_PASS"
       - name: macOS candidate artifacts
         if: always()
