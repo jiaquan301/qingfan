@@ -28,11 +28,10 @@ class DesktopWindowBridge {
       size: sizeFor(controller.mode, controller.panel),
       minimumSize: miniSize,
       center: true,
-      // Linux uses an RGBA GTK visual and a transparent FlView; when the
-      // compositor does not support alpha, GTK falls back to opaque drawing.
-      backgroundColor: Platform.isLinux
-          ? Colors.transparent
-          : const Color(0xFFF5F7F4),
+      // The dial is a frameless translucent surface on every desktop OS.
+      // Expanded panels paint their own opaque porcelain background. Linux
+      // also needs the RGBA GTK runner patch for true corner transparency.
+      backgroundColor: Colors.transparent,
       titleBarStyle: TitleBarStyle.hidden,
       skipTaskbar: false,
     );
