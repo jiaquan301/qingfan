@@ -31,6 +31,33 @@ class CrystalClock extends StatefulWidget {
 class _CrystalClockState extends State<CrystalClock> {
   bool _hovered = false;
 
+  // Keep the timepiece reactive even when embedded without a parent
+  // AnimatedBuilder (widget previews and isolated tool windows).
+  void _modelChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_modelChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant CrystalClock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_modelChanged);
+      widget.controller.addListener(_modelChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_modelChanged);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
