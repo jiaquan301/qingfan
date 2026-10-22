@@ -68,7 +68,13 @@ class QingfanController extends ChangeNotifier {
       : engine = engine ?? FocusEngine(),
         _store = store {
     _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      final phaseBefore = this.engine.phase;
+      final stateBefore = this.engine.runState;
       final completed = this.engine.tick();
+      // Break completion returns false (no focus credit), but still
+      // changes the active phase and MUST repaint and save.
+      final transitioned = phaseBefore != this.engine.phase ||
+          stateBefore != this.engine.runState;
       if (completed && selectedTaskId != null) {
         for (final task in tasks) {
           if (task.id == selectedTaskId && !task.done) {
@@ -77,13 +83,8 @@ class QingfanController extends ChangeNotifier {
           }
         }
       }
-      if (completed || !this.engine.isRunning) {
-        if (completed) _scheduleSave();
-        // For paused clocks, the canvas does not need to repaint.
-        if (completed) notifyListeners();
-      } else {
-        notifyListeners();
-      }
+      if (transitioned) _scheduleSave();
+      if (transitioned || this.engine.isRunning) notifyListeners();
     });
   }
 
@@ -199,6 +200,22 @@ class QingfanController extends ChangeNotifier {
 
   void toggleFocus() {
     engine.toggle();
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// Start/resume focus. From a break, the unfinished rest is discarded.
+  void startFocus() {
+    if (engine.phase != FocusPhase.focus) engine.skipBreak();
+    if (!engine.isRunning) engine.toggle();
+    notifyListeners();
+    _scheduleSave();
+  }
+
+  /// A deliberate break skip returns to a fresh, idle focus interval.
+  void skipBreak() {
+    if (engine.phase == FocusPhase.focus) return;
+    engine.skipBreak();
     notifyListeners();
     _scheduleSave();
   }
