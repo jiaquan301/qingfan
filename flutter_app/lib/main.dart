@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'application/qingfan_controller.dart';
+import 'domain/focus_engine.dart';
 import 'infrastructure/instance_guard.dart';
 import 'infrastructure/local_store.dart';
 import 'infrastructure/window_bridge.dart';
@@ -260,7 +261,7 @@ class _QingfanAppState extends State<QingfanApp> {
   }
 
   void _startFromTasks() {
-    if (!c.engine.isRunning) c.toggleFocus();
+    c.startFocus();
     _closePanel();
   }
 
@@ -285,10 +286,17 @@ class _QingfanAppState extends State<QingfanApp> {
           height: 42,
           child: _smallMenuItem(Icons.tune_rounded, '偏好设置'),
         ),
+        if (c.engine.phase != FocusPhase.focus)
+          PopupMenuItem<String>(
+            value: 'skipBreak',
+            height: 42,
+            child: _smallMenuItem(Icons.skip_next_rounded, '跳过休息，开始专注'),
+          ),
         PopupMenuItem<String>(
           value: 'reset',
           height: 42,
-          child: _smallMenuItem(Icons.restart_alt_rounded, '重新开始本轮'),
+          child: _smallMenuItem(Icons.restart_alt_rounded,
+              c.engine.phase == FocusPhase.focus ? '重新开始本轮' : '返回专注阶段'),
         ),
         PopupMenuItem<String>(
           value: 'pin',
@@ -307,6 +315,9 @@ class _QingfanAppState extends State<QingfanApp> {
         break;
       case 'reset':
         await _confirmReset();
+        break;
+      case 'skipBreak':
+        c.startFocus();
         break;
       case 'pin':
         c.setAlwaysOnTop(!c.alwaysOnTop);
@@ -351,7 +362,8 @@ class _QingfanAppState extends State<QingfanApp> {
   }
 
   Future<void> _confirmReset() async {
-    if (!c.engine.isRunning && !c.engine.hasPartialFocus) {
+    if (c.engine.phase != FocusPhase.focus ||
+        (!c.engine.isRunning && !c.engine.hasPartialFocus)) {
       c.resetFocus();
       return;
     }
