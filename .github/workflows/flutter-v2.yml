@@ -100,8 +100,7 @@ jobs:
           if-no-files-found: warn
 
   windows:
-    if: github.event_name == 'workflow_dispatch'
-    name: Windows portable release build
+    name: Windows native release and installer acceptance
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -116,14 +115,32 @@ jobs:
         run: |
           flutter create --no-pub --project-name qingfan --platforms=windows .
           flutter pub get
+      - name: Verify Windows dependency lock
+        working-directory: flutter_app
+        shell: pwsh
+        run: |
+          git diff --exit-code -- pubspec.lock
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Analyze and run tests
         working-directory: flutter_app
+        shell: pwsh
         run: |
           flutter analyze --no-pub
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           flutter test --no-pub
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Windows x64 release bundle
         working-directory: flutter_app
         run: flutter build windows --release --no-pub
+      - name: Verify Windows release bundle
+        working-directory: flutter_app
+        shell: pwsh
+        run: |
+          $root = "build/windows/x64/runner/Release"
+          @("qingfan.exe", "flutter_windows.dll", "data/flutter_assets") | ForEach-Object {
+            if (-not (Test-Path (Join-Path $root $_))) { throw "Windows release missing: $_" }
+          }
+          Write-Output "WINDOWS_RELEASE_BUNDLE_PASS"
       - name: Package portable candidate
         working-directory: flutter_app
         shell: pwsh
@@ -153,8 +170,7 @@ jobs:
           if-no-files-found: error
 
   macos:
-    if: github.event_name == 'workflow_dispatch'
-    name: macOS app bundle build
+    name: macOS native release and DMG acceptance
     runs-on: macos-15
     timeout-minutes: 40
     steps:
@@ -169,6 +185,9 @@ jobs:
         run: |
           flutter create --no-pub --project-name qingfan --platforms=macos .
           flutter pub get
+      - name: Verify macOS dependency lock
+        working-directory: flutter_app
+        run: git diff --exit-code -- pubspec.lock
       - name: Analyze and run tests
         working-directory: flutter_app
         run: |
@@ -177,6 +196,13 @@ jobs:
       - name: macOS release bundle (unsigned)
         working-directory: flutter_app
         run: flutter build macos --release --no-pub
+      - name: Verify macOS app bundle
+        working-directory: flutter_app
+        run: |
+          test -x build/macos/Build/Products/Release/qingfan.app/Contents/MacOS/qingfan
+          test -f build/macos/Build/Products/Release/qingfan.app/Contents/Info.plist
+          plutil -lint build/macos/Build/Products/Release/qingfan.app/Contents/Info.plist
+          echo "MACOS_APP_BUNDLE_PASS"
       - name: Package unsigned test candidate
         working-directory: flutter_app
         run: |
