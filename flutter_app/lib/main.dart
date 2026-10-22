@@ -135,7 +135,9 @@ Future<void> _nativeSmoke(
   }
 
   Future<void> checkTopmost(String surface) async {
-    if (!Platform.isLinux || bridge.likelyWayland) return;
+    // The native plugin reports the actual topmost state on macOS and Windows.
+    // Wayland compositors are allowed to restrict pinning.
+    if (bridge.likelyWayland) return;
     await Future<void>.delayed(const Duration(milliseconds: 120));
     final reported = await windowManager.isAlwaysOnTop();
     stdout.writeln('NATIVE_TOPMOST_SURFACE $surface reported=$reported');
@@ -374,8 +376,11 @@ class _QingfanAppState extends State<QingfanApp> {
       home: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.space): _spaceShortcut,
-          const SingleActivator(LogicalKeyboardKey.keyL, control: true): _showTasks,
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true): _showTasks,
+          // macOS uses Command; Windows and Linux use Ctrl.
+          SingleActivator(LogicalKeyboardKey.keyL,
+              control: !Platform.isMacOS, meta: Platform.isMacOS): _showTasks,
+          SingleActivator(LogicalKeyboardKey.keyF,
+              control: !Platform.isMacOS, meta: Platform.isMacOS): _showTasks,
           const SingleActivator(LogicalKeyboardKey.escape): _escapeShortcut,
         },
         child: Focus(
