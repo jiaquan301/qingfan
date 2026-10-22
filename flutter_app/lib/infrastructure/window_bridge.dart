@@ -14,13 +14,17 @@ class DesktopWindowBridge {
       Platform.isWindows ? windowsDialWindowSize : dialSize;
   // Fixed 112px clock rail plus a 410px task/settings workspace.
   static const panelSize = Size(522, 510);
+  static const menuSize = Size(370, 340);
 
   bool get likelyWayland =>
       Platform.isLinux &&
       Platform.environment['XDG_SESSION_TYPE']?.toLowerCase() == 'wayland';
 
-  Size sizeFor(OpenPanel panel) =>
-      panel == OpenPanel.none ? effectiveDialWindowSize : panelSize;
+  Size sizeFor(OpenPanel panel) => switch (panel) {
+    OpenPanel.none => effectiveDialWindowSize,
+    OpenPanel.menu => menuSize,
+    OpenPanel.tasks || OpenPanel.settings => panelSize,
+  };
 
   Future<void> prepare() => windowManager.ensureInitialized();
 
