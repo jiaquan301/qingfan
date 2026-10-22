@@ -230,60 +230,57 @@ class _QingfanAppState extends State<QingfanApp> {
     _surface(() => c.openPanel(OpenPanel.settings));
   }
 
-  Future<void> _showMoreMenu() async {
-    // Low-frequency operations belong to a discoverable secondary menu,
-    // not four equally prominent corner buttons around the timepiece.
-    final navigatorContext = _navigatorKey.currentState?.overlay?.context;
-    if (navigatorContext == null) return;
-    final selected = await showMenu<String>(
-      context: navigatorContext,
-      position: const RelativeRect.fromLTRB(74, 62, 4, 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: const Color(0xFFF9FBF8),
-      constraints: const BoxConstraints(minWidth: 196, maxWidth: 218),
-      items: [
-        PopupMenuItem<String>(
-          value: 'settings',
-          height: 42,
-          child: _smallMenuItem(Icons.tune_rounded, '偏好设置'),
-        ),
-        if (c.engine.phase == FocusPhase.focus)
-          PopupMenuItem<String>(
-            value: 'reset',
-            height: 42,
-            child: _smallMenuItem(Icons.restart_alt_rounded, '重新开始本轮'),
-          ),
-        PopupMenuItem<String>(
-          value: 'pin',
-          height: 42,
-          child: _smallMenuItem(
-            c.alwaysOnTop ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-            c.alwaysOnTop ? '取消置顶' : '始终置顶',
-          ),
-        ),
-      ],
-    );
-    if (!mounted) return;
-    switch (selected) {
-      case 'settings':
-        _showSettings();
-        break;
-      case 'reset':
-        await _confirmReset();
-        break;
-      case 'pin':
-        c.setAlwaysOnTop(!c.alwaysOnTop);
-        await widget.bridge.applyTopmost(c);
-        break;
-    }
+  // A popup route cannot extend beyond a 104px native window. Expand the
+  // same window to a compact operation pane instead of clipping the menu.
+  void _showMoreMenu() {
+    _surface(() => c.openPanel(OpenPanel.menu));
   }
 
-  Widget _smallMenuItem(IconData icon, String label) => Row(
+  void _togglePin() {
+    c.setAlwaysOnTop(!c.alwaysOnTop);
+    unawaited(widget.bridge.applyTopmost(c));
+    _closePanel();
+  }
+
+  Widget _menuPane() => Material(
+    color: QStyle.canvas,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(icon, size: 17, color: QStyle.jade),
-          const SizedBox(width: 12),
-          Text(label, style: QStyle.section),
+          QPanelHeader(title: '更多', onClose: _closePanel),
+          const SizedBox(height: 10),
+          _menuAction(Icons.tune_rounded, '偏好设置', _showSettings),
+          if (c.engine.phase == FocusPhase.focus)
+            _menuAction(Icons.restart_alt_rounded, '重新开始本轮', () {
+              unawaited(_confirmReset());
+            }),
+          _menuAction(
+            c.alwaysOnTop ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+            c.alwaysOnTop ? '取消置顶' : '始终置顶',
+            _togglePin,
+          ),
         ],
+      ),
+    ),
+  );
+
+  Widget _menuAction(IconData icon, String label, VoidCallback action) =>
+      TextButton.icon(
+        onPressed: action,
+        icon: Icon(icon, size: 18),
+        label: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(label),
+        ),
+        style: TextButton.styleFrom(
+          foregroundColor: QStyle.jade,
+          minimumSize: const Size.fromHeight(46),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(11),
+          ),
+        ),
       );
 
   void _closePanel() {
@@ -317,6 +314,7 @@ class _QingfanAppState extends State<QingfanApp> {
     if (c.engine.phase == FocusPhase.rest) return;
     if (!c.engine.isRunning && !c.engine.hasPartialFocus) {
       c.resetFocus();
+      if (c.panel == OpenPanel.menu) _closePanel();
       return;
     }
     final navigatorContext = _navigatorKey.currentState?.overlay?.context;
@@ -327,7 +325,10 @@ class _QingfanAppState extends State<QingfanApp> {
       description: '未完成的专注时间将清零；已完成的番茄不会改变。',
       action: '重新开始',
     );
-    if (accepted == true) c.resetFocus();
+    if (accepted == true) {
+      c.resetFocus();
+      if (c.panel == OpenPanel.menu) _closePanel();
+    }
   }
 
   @override
@@ -395,10 +396,12 @@ class _QingfanAppState extends State<QingfanApp> {
                                     onClose: _closePanel,
                                     onStart: _startFromTasks,
                                   )
-                                : SettingsPane(
-                                    controller: c,
-                                    onClose: _closePanel,
-                                  ),
+                                : c.panel == OpenPanel.settings
+                                    ? SettingsPane(
+                                        controller: c,
+                                        onClose: _closePanel,
+                                      )
+                                    : _menuPane(),
                           ),
                         ],
                       ),
