@@ -22,7 +22,7 @@ class SettingsPane extends StatefulWidget {
 class _SettingsPaneState extends State<SettingsPane> {
   late final List<TextEditingController> _numbers;
   late final List<FocusNode> _focusNodes;
-  static const _labels = ['专注时间', '短休息', '长休息'];
+  static const _labels = ['专注时间', '休息时间'];
 
   @override
   void initState() {
@@ -30,11 +30,10 @@ class _SettingsPaneState extends State<SettingsPane> {
     final e = widget.controller.engine;
     _numbers = [
       TextEditingController(text: e.focusMinutes.toString()),
-      TextEditingController(text: e.shortBreakMinutes.toString()),
-      TextEditingController(text: e.longBreakMinutes.toString()),
+      TextEditingController(text: e.restMinutes.toString()),
     ];
-    _focusNodes = List.generate(3, (_) => FocusNode());
-    for (var i = 0; i < 3; i++) {
+    _focusNodes = List.generate(2, (_) => FocusNode());
+    for (var i = 0; i < 2; i++) {
       final index = i;
       _focusNodes[i].addListener(() {
         if (!_focusNodes[index].hasFocus) _commit(index);
@@ -44,7 +43,7 @@ class _SettingsPaneState extends State<SettingsPane> {
 
   List<int> get _durations {
     final e = widget.controller.engine;
-    return [e.focusMinutes, e.shortBreakMinutes, e.longBreakMinutes];
+    return [e.focusMinutes, e.restMinutes];
   }
 
   void _commit(int index) {
@@ -53,7 +52,7 @@ class _SettingsPaneState extends State<SettingsPane> {
     final corrected = (parsed ?? before[index]).clamp(1, 180);
     final values = List<int>.from(before);
     values[index] = corrected;
-    widget.controller.configureTimes(values[0], values[1], values[2]);
+    widget.controller.configureTimes(values[0], values[1]);
     _numbers[index].value = TextEditingValue(
       text: corrected.toString(),
       selection: TextSelection.collapsed(offset: corrected.toString().length),
@@ -67,7 +66,6 @@ class _SettingsPaneState extends State<SettingsPane> {
     widget.controller.configureTimes(
       index == 0 ? next : values[0],
       index == 1 ? next : values[1],
-      index == 2 ? next : values[2],
     );
     _numbers[index].value = TextEditingValue(
       text: next.toString(),
@@ -76,7 +74,7 @@ class _SettingsPaneState extends State<SettingsPane> {
   }
 
   void _close() {
-    for (var i = 0; i < 3; i++) {
+    for (var i = 0; i < 2; i++) {
       _commit(i);
     }
     widget.onClose();
@@ -196,7 +194,7 @@ class _SettingsPaneState extends State<SettingsPane> {
             const SizedBox(height: 18),
             Text('计时', style: QStyle.detail),
             const SizedBox(height: 7),
-            for (var i = 0; i < 3; i++) _durationRow(i),
+            for (var i = 0; i < 2; i++) _durationRow(i),
             const SizedBox(height: 16),
             Text('外观', style: QStyle.detail),
             const SizedBox(height: 10),
