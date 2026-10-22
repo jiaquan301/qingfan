@@ -170,6 +170,7 @@ jobs:
           $setup = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$location") -PassThru -Wait
           if ($setup.ExitCode -ne 0) { throw "Inno installer returned $($setup.ExitCode)" }
           if (-not (Test-Path (Join-Path $location 'qingfan.exe'))) { throw 'Installed qingfan.exe missing' }
+          ./tool/native_smoke_windows.ps1 -Executable (Join-Path $location 'qingfan.exe')
           $uninstaller = Join-Path $location 'unins000.exe'
           if (-not (Test-Path $uninstaller)) { throw 'Inno uninstaller missing' }
           $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait
@@ -185,6 +186,7 @@ jobs:
             flutter_app/dist/*.exe
             flutter_app/windows-native-smoke.log
             flutter_app/windows-native-stderr.log
+            flutter_app/windows-native-desktop.png
           if-no-files-found: warn
       - name: Windows portable artifact
         uses: actions/upload-artifact@v4
@@ -259,4 +261,5 @@ jobs:
             flutter_app/dist/*.zip
             flutter_app/dist/*.dmg
             flutter_app/macos-native-smoke.log
+            flutter_app/macos-native-desktop.png
           if-no-files-found: warn
