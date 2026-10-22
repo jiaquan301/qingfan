@@ -84,12 +84,12 @@ $log = (Get-Content -Raw -Path $stdout) + "`n" + (Get-Content -Raw -Path $stderr
 Write-Output $log
 if ($process.ExitCode -ne 0) { throw "WINDOWS_NATIVE_EXIT_FAILED: $($process.ExitCode)" }
 $required = @(
-  'NATIVE_SMOKE_SIZE full:',
-  'NATIVE_SMOKE_SIZE mini:',
+  'NATIVE_SMOKE_SIZE dial:',
+  'NATIVE_SMOKE_SIZE dial_return:',
   'NATIVE_SMOKE_SIZE tasks:',
   'NATIVE_SMOKE_SIZE tasks_50:',
   'NATIVE_SMOKE_SIZE settings:',
-  'NATIVE_TOPMOST_SURFACE mini reported=true',
+  'NATIVE_TOPMOST_SURFACE dial reported=true',
   'NATIVE_TOPMOST_SURFACE settings reported=true',
   'NATIVE_TOPMOST_RESET reported=false',
   'NATIVE_SMOKE_TOPMOST_ALL_SURFACES_PASS',
