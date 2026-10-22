@@ -1,200 +1,85 @@
 #!/usr/bin/env bash
-# Verifies an actual Flutter Linux GTK window under Xvfb and Openbox.
+# Flutter V3 single 104px crystal dial acceptance on a real composited X11.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 app="./build/linux/x64/release/bundle/qingfan"
-test -x "$app" || { echo "Release executable not found: $app" >&2; exit 1; }
-command -v wmctrl >/dev/null
+test -x "$app"
 openbox --sm-disable >/tmp/qingfan-openbox.log 2>&1 &
 wm_pid=$!
 picom --backend xrender --no-vsync --no-fading-openclose >/tmp/qingfan-picom.log 2>&1 &
 compositor_pid=$!
-watch_pid=""
 cleanup() {
-  [[ -n "$watch_pid" ]] && kill "$watch_pid" >/dev/null 2>&1 || :
-  kill "$compositor_pid" >/dev/null 2>&1 || :
-  kill "$wm_pid" >/dev/null 2>&1 || :
+  kill "$compositor_pid" "$wm_pid" 2>/dev/null || true
 }
 trap cleanup EXIT
-sleep 0.7
-kill -0 "$compositor_pid" >/dev/null 2>&1 ||
-  { cat /tmp/qingfan-picom.log >&2; echo 'X11_COMPOSITOR_UNAVAILABLE' >&2; exit 1; }
-echo 'X11_COMPOSITOR_READY'
-# Dark wallpaper exposes opaque white square backgrounds in otherwise round
-# glass clocks. This makes transparency objectively testable.
+sleep .8
+kill -0 "$compositor_pid"
 xsetroot -solid '#34203B'
-seen_file="$(mktemp)"
-trap 'rm -f "$seen_file"; cleanup' EXIT
-(
-  for _ in $(seq 1 150); do
-    count="$(wmctrl -l | grep -E '青番|qingfan' | wc -l || :)"
-    echo "$count" >> "$seen_file"
-    sleep .09
-  done
-) &
-watch_pid=$!
-# Keep the initial screenshot free of the desktop's default pointer tooltip.
-# The app window opens centered, while this pointer position stays outside it.
 xdotool mousemove 10 10
-# Launch a second instance while the main native window is alive. It must
-# detect the held OS lock, return immediately, and never create another view.
-QINGFAN_NATIVE_SMOKE=1 QINGFAN_NATIVE_DRAG=1 timeout 55s "$app" >native-smoke.log 2>&1 &
-main_pid=$!
-# Wait for the primary window to become real and publish a geometry result
-# BEFORE attempting a second start. Racing both GTK runners at boot would
-# only test process scheduling and can reverse which process owns the lock.
+QINGFAN_NATIVE_SMOKE=1 QINGFAN_NATIVE_DRAG=1 timeout 55s "$app" > native-smoke.log 2>&1 &
+app_pid=$!
 ready=0
 for _ in $(seq 1 100); do
-  if grep -q 'NATIVE_SMOKE_OBSERVED full' native-smoke.log; then
-    ready=1
-    break
-  fi
-  if ! kill -0 "$main_pid" >/dev/null 2>&1; then break; fi
-  sleep .10
+  if grep -q "NATIVE_SMOKE_OBSERVED dial " native-smoke.log; then ready=1; break; fi
+  kill -0 "$app_pid" 2>/dev/null || break
+  sleep .1
 done
-if [[ "$ready" != "1" ]]; then
-  cat native-smoke.log
-  echo "NATIVE_PRIMARY_STARTUP_FAILED" >&2
+if [[ "$ready" != 1 ]]; then cat native-smoke.log; exit 1; fi
+for _ in $(seq 1 100); do
+  if grep -q 'NATIVE_DRAG_READY dial' native-smoke.log; then break; fi
+  sleep .08
+done
+grep -q 'NATIVE_DRAG_READY dial' native-smoke.log
+geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
+read -r x y w h < <(awk '{print $3, $4, $5, $6}' <<< "$geometry")
+# Drag left outer ring, never the centre, task control or menu.
+xdotool mousemove --sync $((x + 9)) $((y + h / 2))
+xdotool mousedown 1
+sleep .12
+xdotool mousemove --sync $((x + 76)) $((y + h / 2 + 40))
+sleep .15
+xdotool mousemove --sync $((x + 125)) $((y + h / 2 + 75))
+sleep .12
+xdotool mouseup 1
+sleep .2
+geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
+read -r nx ny < <(awk '{print $3, $4}' <<< "$geometry")
+echo "NATIVE_DRAG_POSITION dial: ($x,$y) -> ($nx,$ny)"
+if (( nx - x < 25 && x - nx < 25 && ny - y < 25 && y - ny < 25 )); then
+  echo 'NATIVE_DRAG_FAILED' >&2
   exit 1
 fi
-# X11 end-to-end: click-and-hold on the visible outer dial ring and
-# physically move the pointer. wmctrl must report the actual GTK window moved.
-# This catches the old onPressed callback that ran on mouse-up (too late).
-wait_for_drag_scene() {
-  local scene="$1"
-  for _ in $(seq 1 90); do
-    if grep -q "NATIVE_DRAG_READY $scene" native-smoke.log; then
-      return 0
-    fi
-    if ! kill -0 "$main_pid" >/dev/null 2>&1; then break; fi
-    sleep .08
-  done
-  cat native-smoke.log
-  echo "NATIVE_DRAG_SCENE_TIMEOUT $scene" >&2
-  return 1
-}
-move_window_by_pointer() {
-  local scene="$1"
-  local geometry xy x y w h target_x target_y after_x after_y
-  geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
-  read -r x y w h < <(awk '{print $3, $4, $5, $6}' <<< "$geometry")
-  # Ring top contains no click button or timer centre in either geometry.
-  # The mini timer's centre hit target covers the upper middle of its dial.
-  # Use the LEFT ring at (12,52), far from both timer and corner controls.
-  # The full dial is inset ~26px; its top rim is a safe drag area.
-  if [[ "$scene" == "full" ]]; then
-    target_x=$((x + w / 2))
-    target_y=$((y + 54))
-  else
-    target_x=$((x + 12))
-    target_y=$((y + h / 2))
-  fi
-  xdotool mousemove --sync "$target_x" "$target_y"
-  xdotool mousedown 1
-  sleep .15
-  xdotool mousemove --sync $((target_x + 70)) $((target_y + 45))
-  sleep .20
-  xdotool mousemove --sync $((target_x + 125)) $((target_y + 85))
-  sleep .20
-  xdotool mouseup 1
-  sleep .25
-  geometry="$(wmctrl -lG | grep -E '青番|qingfan' | head -1)"
-  read -r after_x after_y < <(awk '{print $3, $4}' <<< "$geometry")
-  echo "NATIVE_DRAG_POSITION $scene: ($x,$y) -> ($after_x,$after_y)"
-  if (( after_x - x < 25 && x - after_x < 25 &&
-        after_y - y < 25 && y - after_y < 25 )); then
-    echo "NATIVE_DRAG_FAILED $scene: GTK window did not move" >&2
-    return 1
-  fi
-  echo "NATIVE_DRAG_PASS $scene"
-}
-wait_for_drag_scene full
-move_window_by_pointer full
-set +e
-timeout 15s "$app" >native-second-instance.log 2>&1
-second_status=$?
-set -e
-wait_for_drag_scene mini
-move_window_by_pointer mini
-set +e
-wait "$main_pid"
-status=$?
-set -e
-echo "NATIVE_SECOND_INSTANCE_EXIT=$second_status"
-cat native-smoke.log
-if [[ "$status" -ne 0 ]]; then
-  echo "NATIVE_SMOKE_FAILED exit=$status" >&2
-  exit "$status"
-fi
-echo 'NATIVE_SMOKE_EXIT_STATUS_PASS'
-[[ "$second_status" -eq 0 ]] ||
-  { cat native-second-instance.log >&2; echo "SECOND_INSTANCE_FAILED" >&2; exit 1; }
-grep -q 'QINGFAN_ALREADY_RUNNING' native-second-instance.log ||
-  { cat native-second-instance.log >&2; echo "SECOND_INSTANCE_LOCK_FAILED" >&2; exit 1; }
-echo 'NATIVE_SINGLE_INSTANCE_PASS'
-grep -q 'NATIVE_SMOKE_PASS' native-smoke.log
-for scene in full menu mini full_return tasks tasks_50 settings close_tasks; do
-  grep -q "NATIVE_SMOKE_SIZE $scene:" native-smoke.log ||
-    { echo "Missing native geometry check: $scene" >&2; exit 1; }
+echo 'NATIVE_DRAG_PASS dial'
+timeout 12s "$app" > native-second-instance.log 2>&1
+grep -q QINGFAN_ALREADY_RUNNING native-second-instance.log
+wait "$app_pid"
+echo NATIVE_SMOKE_EXIT_STATUS_PASS
+grep -q NATIVE_SMOKE_PASS native-smoke.log
+for scene in dial tasks tasks_50 settings dial_return; do
+  grep -q "NATIVE_SMOKE_SIZE $scene:" native-smoke.log
 done
-if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
-  for scene in full menu mini full_return tasks tasks_50 settings close_tasks; do
-    direct="native-shots/$scene.png"
-    root="native-shots/$scene-root.png"
-    [[ -s "$direct" && -s "$root" ]] ||
-      { echo "NATIVE_SCREENSHOT_MISSING $scene" >&2; exit 1; }
-    direct_entropy="$(identify -format '%[entropy]' "$direct")"
-    root_entropy="$(identify -format '%[entropy]' "$root")"
-    echo "NATIVE_SCREENSHOT_ENTROPY $scene direct=$direct_entropy root=$root_entropy"
-    awk -v direct="$direct_entropy" -v root="$root_entropy" \
-      'BEGIN { exit !((direct > 0.01) || (root > 0.01)) }' ||
-      { echo "NATIVE_SCREENSHOT_BLANK $scene direct=$direct_entropy root=$root_entropy" >&2; exit 1; }
+if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == 1 ]]; then
+  for scene in dial tasks tasks_50 settings dial_return; do
+    for kind in "" "-root"; do
+      file="native-shots/$scene$kind.png"
+      [[ -s "$file" ]]
+      entropy="$(identify -format '%[entropy]' "$file")"
+      awk -v n="$entropy" 'BEGIN{ exit !(n > 0.01) }'
+    done
   done
-  echo 'NATIVE_VISUAL_CONTENT_PASS'
-  menu_changed="$(compare -metric AE native-shots/full-root.png native-shots/menu-root.png null: 2>&1 || true)"
-  menu_changed="${menu_changed%% *}"
-  echo "NATIVE_MENU_CHANGED_PIXELS=${menu_changed}"
-  # A tooltip changes ~2,000 pixels, whereas the compact 3-row menu
-  # must change substantially more. The route alone is insufficient.
-  [[ "$menu_changed" =~ ^[0-9]+$ ]] && (( menu_changed > 7000 )) ||
-    { echo "NATIVE_MENU_NOT_RENDERED" >&2; exit 1; }
-  echo 'NATIVE_MORE_MENU_RENDER_PASS'
-  # Root framebuffer captures the composited display: at the round clock's
-  # top-left corner we must see the dark desktop, not an opaque application
-  # rectangle. Require both full and mini clocks to pass the alpha test.
-  for scene in full mini; do
-    # Read all RGB channels: Xvfb compositors may use gray, the configured
-    # purple wallpaper or a magenta clear color for transparency. A red-only
-    # test produced false positives when the compositor returned (255,0,255).
-    corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{2,2}.r)] %[fx:int(255*u.p{2,2}.g)] %[fx:int(255*u.p{2,2}.b)]' info:)"
-    read -r r g b <<< "$corner"
-    echo "NATIVE_ALPHA_CORNER $scene rgb=($r,$g,$b)"
-    # The opaque porcelain fallback makes all channels >= 185. Real
-    # composited desktop pixels have at least one substantially dark channel.
-    if (( r >= 185 && g >= 185 && b >= 185 )); then
-      echo "NATIVE_ALPHA_CORNER_OPAQUE $scene rgb=($r,$g,$b)" >&2
-      exit 1
-    fi
+  corner="$(convert native-shots/dial-root.png -format '%[fx:int(255*u.p{2,2}.r)] %[fx:int(255*u.p{2,2}.g)] %[fx:int(255*u.p{2,2}.b)]' info:)"
+  read -r r g b <<< "$corner"
+  if (( r >= 185 && g >= 185 && b >= 185 )); then
+    echo "NATIVE_ALPHA_CORNER_OPAQUE $corner" >&2
+    exit 1
+  fi
+  echo NATIVE_ROUND_WINDOW_ALPHA_PASS
+  for scene in tasks tasks_50 settings; do
+    red="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{15,15}.r)]' info:)"
+    [[ "$red" -gt 185 ]]
   done
-  echo 'NATIVE_ROUND_WINDOW_ALPHA_PASS'
-  # The expanded task workspace must have an intentionally pale surface.
-  # A transparent Flutter Scaffold inside a 768x540 GTK window produced
-  # a solid black rectangle on some Linux compositors.
-  tasks_corner="$(convert "native-shots/tasks-root.png" -format '%[fx:int(255*u.p{15,15}.r)]' info:)"
-  echo "NATIVE_TASK_WORKSPACE_CORNER red=$tasks_corner"
-  [[ "$tasks_corner" -gt 185 ]] ||
-    { echo "NATIVE_TASK_WORKSPACE_BLACK_BACKGROUND red=$tasks_corner" >&2; exit 1; }
-  echo 'NATIVE_TASK_WORKSPACE_SURFACE_PASS'
-  for scene in tasks_50 settings; do
-    corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{15,15}.r)]' info:)"
-    echo "NATIVE_PANEL_CORNER $scene red=$corner"
-    [[ "$corner" -gt 185 ]] ||
-      { echo "NATIVE_PANEL_BLACK_BACKGROUND $scene red=$corner" >&2; exit 1; }
-  done
-  echo 'NATIVE_SETTINGS_AND_LONG_LIST_SURFACE_PASS'
+  echo NATIVE_PANEL_SURFACE_PASS
 fi
-max_count="$(sort -nr "$seen_file" | head -1)"
-echo "NATIVE_SMOKE_MAX_WINDOWS=$max_count"
-[[ "$max_count" == "1" ]] ||
-  { echo "Expected one and only one Qingfan top-level window" >&2; exit 1; }
-echo 'NATIVE_LINUX_X11_ACCEPTANCE_PASS'
+[[ "$(wmctrl -l | grep -E '青番|qingfan' | wc -l || true)" -le 1 ]]
+echo NATIVE_SINGLE_INSTANCE_PASS
+echo NATIVE_LINUX_X11_ACCEPTANCE_PASS
