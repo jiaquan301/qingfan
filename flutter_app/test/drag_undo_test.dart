@@ -4,41 +4,34 @@ import 'package:qingfan/application/qingfan_controller.dart';
 import 'package:qingfan/presentation/crystal_clock.dart';
 import 'package:qingfan/presentation/task_drawer.dart';
 
-Widget _clock(QingfanController c, VoidCallback onDrag, {bool mini = false}) {
-  if (mini) c.setMode(ClockMode.mini);
-  return MaterialApp(
-    home: Scaffold(
-      body: SizedBox(
-        width: mini ? 104 : 376,
-        height: mini ? 104 : 408,
-        child: CrystalClock(
-          controller: c,
-          onTasks: () {},
-          onSettings: () {},
-          onMode: () {},
-          onReset: () {},
-          onDrag: onDrag,
-          onMore: () {},
-        ),
+Widget _clock(QingfanController c, VoidCallback onDrag) => MaterialApp(
+  home: Scaffold(
+    body: SizedBox(
+      width: 104, height: 104,
+      child: CrystalClock(
+        controller: c,
+        onTasks: () {},
+        onDrag: onDrag,
+        onMore: () {},
       ),
     ),
-  );
-}
+  ),
+);
 
 void main() {
-  testWidgets('Full clock ring and explicit handle initiate pointer dragging',
+  testWidgets('Single 104px dial ring supports dragging without toggling timer',
       (tester) async {
     final c = QingfanController();
     var drags = 0;
     await tester.pumpWidget(_clock(c, () => drags++));
     final ring = tester.getRect(find.byKey(const Key('clockDragSurface')));
-    final start = Offset(ring.center.dx, ring.top + 28);
+    final start = Offset(ring.center.dx, ring.top + 5);
     final gesture = await tester.startGesture(start);
     await gesture.moveBy(const Offset(35, 20));
     await tester.pump();
     await gesture.up();
     expect(drags, 1);
-    final side = Offset(ring.left + 28, ring.center.dy);
+    final side = Offset(ring.left + 6, ring.center.dy);
     final next = await tester.startGesture(side);
     await next.moveBy(const Offset(32, 12));
     await tester.pump();
@@ -49,22 +42,6 @@ void main() {
     await tester.tap(find.byKey(const Key('clockCenter')));
     expect(c.engine.isRunning, true);
     expect(drags, 2);
-    await tester.pumpWidget(const SizedBox());
-    c.dispose();
-  });
-
-  testWidgets('Mini clock retains accessible native drag region',
-      (tester) async {
-    final c = QingfanController();
-    var drags = 0;
-    await tester.pumpWidget(_clock(c, () => drags++, mini: true));
-    final ring = tester.getRect(find.byKey(const Key('clockDragSurface')));
-    final side = Offset(ring.left + 12, ring.center.dy);
-    final gesture = await tester.startGesture(side);
-    await gesture.moveBy(const Offset(32, 12));
-    await tester.pump();
-    await gesture.up();
-    expect(drags, 1);
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
