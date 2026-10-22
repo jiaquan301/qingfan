@@ -74,6 +74,11 @@ void main() {
     expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
     await tester.tap(find.byKey(const Key('focusToggleIcon')));
     await tester.pump();
+    expect(c.engine.isRunning, isTrue);
+    // Touch-based tester.tap may clear desktop mouse hover; restore the
+    // pointer before checking the currently revealed control.
+    await mouse.moveTo(tester.getCenter(find.byKey(const Key('singleDial'))));
+    await tester.pump();
     expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
     await mouse.removePointer();
     await tester.pumpWidget(const SizedBox());
