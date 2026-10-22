@@ -92,7 +92,7 @@ void main() {
     final a = QingfanController(store: store);
     a.addTask('测试任务');
     a.setOpacity(.85);
-    a.configureTimes(40, 8, 20);
+    a.configureTimes(40, 8);
     a.setAlwaysOnTop(true);
     await a.flush();
     a.dispose();
@@ -101,8 +101,7 @@ void main() {
     expect(b.tasks.single.title, '测试任务');
     expect(b.glassOpacity, .85);
     expect(b.engine.focusMinutes, 40);
-    expect(b.engine.shortBreakMinutes, 8);
-    expect(b.engine.longBreakMinutes, 20);
+    expect(b.engine.restMinutes, 8);
     expect(b.alwaysOnTop, isTrue);
     b.dispose();
   });
@@ -114,13 +113,13 @@ void main() {
     final clock = _FakeClock();
     final a = QingfanController(
       store: store,
-      engine: FocusEngine(clock: clock, focusMinutes: 1, shortBreakMinutes: 5),
+      engine: FocusEngine(clock: clock, focusMinutes: 1, restMinutes: 5),
     );
     a.addTask('完成青番测试');
     a.startFocus();
     clock.advance(60000);
     expect(a.engine.tick(), true);
-    a.engine.toggle(); // Start the break.
+    // Rest starts automatically when focus completes.
     clock.advance(28000);
     await a.flush();
     a.dispose();
@@ -145,16 +144,15 @@ void main() {
     final store = LocalStore(testDirectory: directory);
     final c = QingfanController(
       store: store,
-      engine: FocusEngine(clock: clock, focusMinutes: 1, shortBreakMinutes: 1),
+      engine: FocusEngine(clock: clock, focusMinutes: 1, restMinutes: 1),
     );
     var changes = 0;
     c.addListener(() => changes++);
     c.startFocus();
     clock.advance(60000);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(c.engine.phase, FocusPhase.shortBreak);
+    expect(c.engine.phase, FocusPhase.rest);
     expect(c.engine.completedRounds, 1);
-    c.toggleFocus();
     clock.advance(60000);
     final before = changes;
     await tester.pump(const Duration(milliseconds: 300));
@@ -171,22 +169,19 @@ void main() {
     c.dispose();
   });
 
-  testWidgets('Full dial offers one-click skip rest then starts focus', (tester) async {
+  testWidgets('Rest has no skip action or pause affordance', (tester) async {
     final clock = _FakeClock();
-    final c = QingfanController(
-        engine: FocusEngine(clock: clock, focusMinutes: 1));
+    final c = QingfanController(engine: FocusEngine(clock: clock, focusMinutes: 1));
     c.startFocus();
     clock.advance(60000);
-    expect(c.engine.tick(), isTrue);
-    await tester.pumpWidget(QingfanApp(
-        controller: c, bridge: DesktopWindowBridge()));
+    expect(c.engine.tick(), true);
+    await tester.pumpWidget(QingfanApp(controller: c, bridge: DesktopWindowBridge()));
     await tester.pump();
-    expect(find.byKey(const Key('skipBreakStart')), findsOneWidget);
-    await tester.tap(find.byKey(const Key('skipBreakStart')));
-    await tester.pump();
-    expect(c.engine.phase, FocusPhase.focus);
-    expect(c.engine.isRunning, isTrue);
-    expect(c.engine.completedRounds, 1);
+    expect(find.byKey(const Key('skipBreakStart')), findsNothing);
+    expect(find.textContaining('跳过'), findsNothing);
+    await tester.tap(find.byKey(const Key('clockCenter')));
+    expect(c.engine.phase, FocusPhase.rest);
+    expect(c.engine.isRunning, true);
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
@@ -205,7 +200,7 @@ void main() {
     await tester.pumpWidget(QingfanApp(
         controller: c, bridge: DesktopWindowBridge()));
     await tester.pump();
-    expect(find.text('跳过休息并开始专注'), findsOneWidget);
+    expect(find.text('开始专注'), findsOneWidget);
     await tester.tap(find.byKey(const Key('drawerStartFocus')));
     await tester.pump();
     expect(c.engine.phase, FocusPhase.focus);
@@ -215,24 +210,18 @@ void main() {
     c.dispose();
   });
 
-  testWidgets('More menu reset during break returns to new focus round', (tester) async {
-    final clock = _FakeClock();
-    final c = QingfanController(
-        engine: FocusEngine(clock: clock, focusMinutes: 1));
-    c.startFocus();
-    clock.advance(60000);
-    expect(c.engine.tick(), true);
-    await tester.pumpWidget(QingfanApp(
-        controller: c, bridge: DesktopWindowBridge()));
+  testWidgets('Single dial never shows task label or long-rest choices',
+      (tester) async {
+    final c = QingfanController();
+    c.addTask('名字只出现在任务面板');
+    await tester.pumpWidget(QingfanApp(controller: c, bridge: DesktopWindowBridge()));
     await tester.pump();
-    await tester.tap(find.byTooltip('更多：设置、重置'));
-    await tester.pumpAndSettle();
-    expect(find.text('返回专注阶段'), findsOneWidget);
-    await tester.tap(find.text('返回专注阶段'));
-    await tester.pumpAndSettle();
-    expect(c.engine.phase, FocusPhase.focus);
-    expect(c.engine.runState, RunState.idle);
-    expect(c.engine.completedRounds, 1);
+    expect(find.text('名字只出现在任务面板'), findsNothing);
+    expect(find.text('短休息'), findsNothing);
+    expect(find.text('长休息'), findsNothing);
+    expect(find.byKey(const Key('singleDial')), findsOneWidget);
+    expect(tester.getSize(find.byKey(const Key('singleDial'))),
+        const Size(104, 104));
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
@@ -280,82 +269,61 @@ void main() {
     c.dispose();
   });
 
-  testWidgets('Clock stays transparent while switching full, mini and panel modes', (tester) async {
+  testWidgets('Dial is transparent, expanded panels paint opaque surface',
+      (tester) async {
     final c = QingfanController();
-    await tester.pumpWidget(
-      QingfanApp(controller: c, bridge: DesktopWindowBridge()),
-    );
+    await tester.pumpWidget(QingfanApp(controller: c, bridge: DesktopWindowBridge()));
     await tester.pump();
-
-    expect(
-      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
-      Colors.transparent,
-    );
-    c.setMode(ClockMode.mini);
-    await tester.pump();
-    expect(
-      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
-      Colors.transparent,
-    );
-
+    expect(tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+        Colors.transparent);
     c.openPanel(OpenPanel.tasks);
     await tester.pump();
-    expect(
-      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
-      isNot(Colors.transparent),
-    );
-
+    expect(tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+        isNot(Colors.transparent));
+    expect(tester.getSize(find.byKey(const Key('singleDial'))),
+        const Size(104, 104));
     c.closePanel();
     await tester.pump();
-    expect(
-      tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
-      Colors.transparent,
-    );
+    expect(tester.widget<Scaffold>(find.byType(Scaffold).first).backgroundColor,
+        Colors.transparent);
     await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
 
-  testWidgets('Full, mini, tasks and settings fit at 100/125/150/200% display scales',
+  testWidgets('104px dial and task/settings fit at 100/125/150/200% desktop scale',
       (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-
     for (final scale in [1.0, 1.25, 1.5, 2.0]) {
       tester.view.devicePixelRatio = scale;
-      tester.view.physicalSize = Size(376 * scale, 408 * scale);
-
+      tester.view.physicalSize = Size(104 * scale, 104 * scale);
       final c = QingfanController();
       for (var i = 0; i < 50; i++) {
         c.addTask('缩放验收任务 ${i + 1}');
       }
-
-      await tester.pumpWidget(
-        QingfanApp(controller: c, bridge: DesktopWindowBridge()),
-      );
+      await tester.pumpWidget(QingfanApp(controller: c, bridge: DesktopWindowBridge()));
       await tester.pumpAndSettle();
       expect(find.text('25:00'), findsOneWidget);
-      expect(tester.takeException(), isNull, reason: 'full clock at $scale');
-
-      c.setMode(ClockMode.mini);
-      tester.view.physicalSize = Size(104 * scale, 104 * scale);
-      await tester.pumpAndSettle();
-      expect(find.text('25:00'), findsOneWidget);
-      expect(tester.takeException(), isNull, reason: 'mini clock at $scale');
+      expect(tester.getSize(find.byKey(const Key('singleDial'))),
+          const Size(104, 104));
+      expect(tester.takeException(), isNull, reason: 'dial scale $scale');
 
       c.openPanel(OpenPanel.tasks);
-      tester.view.physicalSize = Size(714 * scale, 510 * scale);
+      tester.view.physicalSize = Size(522 * scale, 510 * scale);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('taskScroll')), findsOneWidget);
+      expect(tester.getSize(find.byKey(const Key('singleDial'))),
+          const Size(104, 104));
       final action = find.byKey(const Key('drawerStartFocus'));
       expect(tester.getRect(action).bottom, lessThanOrEqualTo(510));
-      expect(tester.takeException(), isNull, reason: 'tasks at $scale');
+      expect(tester.takeException(), isNull, reason: 'tasks scale $scale');
 
       c.openPanel(OpenPanel.settings);
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('durationInput2')), findsOneWidget);
+      expect(find.byKey(const Key('durationInput1')), findsOneWidget);
+      expect(find.byKey(const Key('durationInput2')), findsNothing);
       expect(find.byKey(const Key('glassOpacity')), findsOneWidget);
-      expect(tester.takeException(), isNull, reason: 'settings at $scale');
-
+      expect(tester.takeException(), isNull, reason: 'settings scale $scale');
       await tester.pumpWidget(const SizedBox());
       c.dispose();
     }
