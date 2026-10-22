@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import '../domain/focus_engine.dart';
 import '../infrastructure/local_store.dart';
 
-enum ClockMode { full, mini }
 enum OpenPanel { none, tasks, settings }
 
 class QingfanTask {
@@ -92,7 +91,6 @@ class QingfanController extends ChangeNotifier {
   final LocalStore? _store;
   final List<QingfanTask> tasks = [];
   String? selectedTaskId;
-  ClockMode mode = ClockMode.full;
   OpenPanel panel = OpenPanel.none;
   double glassOpacity = 0.90;
   bool alwaysOnTop = false;
@@ -188,34 +186,16 @@ class QingfanController extends ChangeNotifier {
     return duration <= 0 ? 0 : (1 - engine.remainingMillis / duration).clamp(0.0, 1.0);
   }
 
-  String get phaseLabel => switch (engine.phase) {
-        FocusPhase.focus => switch (engine.runState) {
-            RunState.idle => '准备专注',
-            RunState.running => '正在专注',
-            RunState.paused => '已暂停',
-          },
-        FocusPhase.shortBreak => '短休息',
-        FocusPhase.longBreak => '长休息',
-      };
-
   void toggleFocus() {
+    if (engine.phase == FocusPhase.rest) return;
     engine.toggle();
     notifyListeners();
     _scheduleSave();
   }
 
-  /// Start/resume focus. From a break, the unfinished rest is discarded.
+  /// Starting a task during rest immediately starts a fresh focus.
   void startFocus() {
-    if (engine.phase != FocusPhase.focus) engine.skipBreak();
-    if (!engine.isRunning) engine.toggle();
-    notifyListeners();
-    _scheduleSave();
-  }
-
-  /// A deliberate break skip returns to a fresh, idle focus interval.
-  void skipBreak() {
-    if (engine.phase == FocusPhase.focus) return;
-    engine.skipBreak();
+    engine.startFocus();
     notifyListeners();
     _scheduleSave();
   }
@@ -226,20 +206,11 @@ class QingfanController extends ChangeNotifier {
     _scheduleSave();
   }
 
-  void setMode(ClockMode target) {
-    if (mode == target && panel == OpenPanel.none) return;
-    mode = target;
-    panel = OpenPanel.none;
-    notifyListeners();
-    _scheduleSave();
-  }
-
   void openPanel(OpenPanel target) {
     if (target == OpenPanel.none) {
       closePanel();
       return;
     }
-    mode = ClockMode.full;
     panel = target;
     notifyListeners();
   }
@@ -363,7 +334,7 @@ class QingfanController extends ChangeNotifier {
     final index = tasks.indexWhere((t) => t.id == id);
     if (index < 0) return false;
     final isCurrent = selectedTaskId == id;
-    if (isCurrent && engine.isRunning) return false;
+    if (isCurrent && engine.phase == FocusPhase.focus && engine.isRunning) return false;
     if (isCurrent && engine.hasPartialFocus && !discardPartial) return false;
     final previous = _snapshot(id);
     if (isCurrent && engine.hasPartialFocus) engine.reset();
@@ -380,8 +351,8 @@ class QingfanController extends ChangeNotifier {
     return true;
   }
 
-  void configureTimes(int focus, int shortBreak, int longBreak) {
-    engine.configure(focus: focus, shortBreak: shortBreak, longBreak: longBreak);
+  void configureTimes(int focus, int rest) {
+    engine.configure(focus: focus, rest: rest);
     notifyListeners();
     _scheduleSave();
   }
@@ -397,7 +368,6 @@ class QingfanController extends ChangeNotifier {
         glassOpacity = opacity.toDouble().clamp(0.7, 1.0);
       }
       alwaysOnTop = settings['alwaysOnTop'] == true;
-      mode = settings['clockMode'] == 'mini' ? ClockMode.mini : ClockMode.full;
     }
     tasks.clear();
     final rawTasks = data['tasks'];
@@ -421,7 +391,6 @@ class QingfanController extends ChangeNotifier {
         'settings': {
           'glassOpacity': glassOpacity,
           'alwaysOnTop': alwaysOnTop,
-          'clockMode': mode.name,
         },
         'tasks': tasks.map((t) => t.toJson()).toList(),
         'currentTaskId': selectedTaskId,
