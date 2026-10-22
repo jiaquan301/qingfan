@@ -163,13 +163,18 @@ if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == "1" ]]; then
   # top-left corner we must see the dark desktop, not an opaque application
   # rectangle. Require both full and mini clocks to pass the alpha test.
   for scene in full mini; do
-    corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{2,2}.r)]' info:)"
-    echo "NATIVE_ALPHA_CORNER $scene red=$corner"
-    # Xvfb+picom composites a transparent pixel against its own gray
-    # backing (about 128), not necessarily the xsetroot wallpaper color.
-    # Opaque Qingfan fallback corners are about 245 and MUST fail.
-    [[ "$corner" -ge 60 && "$corner" -lt 190 ]] ||
-      { echo "NATIVE_ALPHA_CORNER_OPAQUE $scene red=$corner" >&2; exit 1; }
+    # Read all RGB channels: Xvfb compositors may use gray, the configured
+    # purple wallpaper or a magenta clear color for transparency. A red-only
+    # test produced false positives when the compositor returned (255,0,255).
+    corner="$(convert "native-shots/$scene-root.png" -format '%[fx:int(255*u.p{2,2}.r)] %[fx:int(255*u.p{2,2}.g)] %[fx:int(255*u.p{2,2}.b)]' info:)"
+    read -r r g b <<< "$corner"
+    echo "NATIVE_ALPHA_CORNER $scene rgb=($r,$g,$b)"
+    # The opaque porcelain fallback makes all channels >= 185. Real
+    # composited desktop pixels have at least one substantially dark channel.
+    if (( r >= 185 && g >= 185 && b >= 185 )); then
+      echo "NATIVE_ALPHA_CORNER_OPAQUE $scene rgb=($r,$g,$b)" >&2
+      exit 1
+    fi
   done
   echo 'NATIVE_ROUND_WINDOW_ALPHA_PASS'
   # The expanded task workspace must have an intentionally pale surface.
