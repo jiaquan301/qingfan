@@ -1,43 +1,35 @@
-# 青番 V2 · Flutter Desktop
+# 青番 V2｜Flutter 跨平台桌面版
 
-**状态：跨平台候选版，正式 GTK3 V1.1 入口尚未被替换。** 本版本以 Flutter 3.47.0 + Dart + `window_manager 0.5.2` 实现一个原生窗口的完整时钟、迷你时钟、任务抽屉和设置界面。
+本目录是 **Flutter V2 的开发工程**（Flutter 3.47.0，Dart，`window_manager 0.5.2`）。面向普通用户的下载、**Ubuntu / Windows / macOS 安装、使用和卸载步骤统一在 [仓库根目录 README](../README.md)**。
 
-- [正式产品需求](../docs/v2-product-prd.md)
-- [技术架构和验收标准](../docs/v2-engineering-acceptance.md)
-- [自动化构建与验收记录](https://github.com/jiaquan301/qingfan/actions/workflows/flutter-v2.yml)
+> **状态**：PR #4 的测试候选版；尚未合并 `main`。2026-10-22 提交 `59c29f2` 的 [三平台 CI](https://github.com/jiaquan301/qingfan/actions/runs/39745725008) 已通过。macOS 包未签名/公证，Windows 包未签名，尚待真实设备最终验收。
 
-## 启动与交互
+## 使用 V2
 
-打开即显示晶透主表盘，不要求预先添加任务；点击表盘中央开始、暂停或继续，点击图标查看任务、设置、缩小、重置。**在表盘外圈的空白处按住鼠标并移动可拖动整个窗口**，完整态和迷你态的拖动图标同样支持按住拖动；单击拖动图标不会触发拖动，必须按住并移动。
+- 启动时显示完整悬浮表盘，无需先建任务；点击中央开始、暂停、继续专注。
+- 表盘“任务清单”可新增、选择、完成/恢复、重命名、删除、搜索和排序任务；完成/删除可在提示有效期内撤销。
+- 在短/长休息阶段，完整表盘、迷你表盘、更多菜单以及任务清单都有跳过休息、直接开始专注的入口。**重新开始本轮**在休息期间会返回新的专注阶段。
+- 应用退出后重新进入：进行中的专注作为暂停状态恢复剩余时间；未完成休息恢复为全新专注；已完成番茄次数、任务和设置保留。
+- 在表盘外圈空白处按住并移动可拖动窗口；按住并移动才触发拖动。设置会自动保存；“始终置顶”只在表盘的“更多”菜单。
+- Windows/Linux `Ctrl+L` 或 `Ctrl+F`、macOS `Command+L` 或 `Command+F` 打开任务清单；非输入状态下 `Space` 切换计时，`Esc` 收起面板或退出编辑焦点。
 
-任务清单支持新增、选择当前任务、完成/恢复、重命名、删除、7 秒后自动消失的撤销提示、拖动及 Alt+方向键排序、搜索和 50 项以上内部滚动。专注进行中不允许直接切换或完成当前任务；暂停且已产生进度时需确认放弃未完成的本轮。专注完成次数独立于任务完成状态。
+默认专注 25 分钟、短休息 5 分钟、长休息 15 分钟；所有时长可在设置中调整。只对**真正完成的专注轮次**记一次番茄数，休息跳过/重置不增加次数。
 
-置顶、窗口大小和背景透明度由原生适配层管理；Wayland 不保证窗口管理器会执行强制置顶请求，不允许将已发送请求理解为已实际置顶。
+## 安装、升级与卸载速查
 
-## 一、Ubuntu 22.04/24.04
+| 平台 | 候选安装包 | 启动 | 卸载 |
+| --- | --- | --- | --- |
+| Ubuntu 22.04 / 24.04 x86-64 | [DEB](https://github.com/jiaquan301/qingfan/actions/runs/39745725008/artifacts/12411307813)：`sudo apt install ./qingfan_2.0.0~dev4_amd64.deb`（在 DEB 所在目录执行） | 应用菜单“青番”或 `/usr/lib/qingfan/qingfan` | `sudo apt remove qingfan` |
+| Windows 10/11 x64 | [安装 EXE](https://github.com/jiaquan301/qingfan/actions/runs/39745725008/artifacts/12410798248) 或 [便携 ZIP](https://github.com/jiaquan301/qingfan/actions/runs/39745725008/artifacts/12411935146) | 开始菜单；便携版解压后运行 `qingfan.exe`（保留整个目录） | 系统“已安装的应用”卸载；便携版删除解压目录 |
+| macOS（CI 候选版） | [DMG / APP ZIP](https://github.com/jiaquan301/qingfan/actions/runs/39745725008/artifacts/12411696796)，将 APP 拷贝至“应用程序” | “应用程序”中的青番；首次打开可能需在系统隐私与安全性中批准可信包 | 退出后删除“应用程序”内 `qingfan.app` |
 
-**建议先从对应提交的 GitHub Actions 中下载 `qingfan-v2-ubuntu-deb` 候选包。** 尚未签名或宣告正式发布，只适合开发测试环境。
+以上链接下载的是 GitHub Actions Artifacts，**需先解压**。默认卸载保留本地数据；V2 文件名为 `qingfan_v2.json`，具体位置取决于系统应用支持目录。旧版 GTK3 V1.1 使用根目录 `./install.sh` 与 `./uninstall.sh`，它们**不会安装或卸载 Flutter V2**。
 
-安装：
+## 源码构建与验证
 
-```bash
-sudo apt install ./qingfan_2.0.0~dev2_amd64.deb
-qingfan
-```
+### Ubuntu 22.04 / 24.04
 
-也可从应用程序菜单打开“青番”。如系统未将 `/usr/lib/qingfan` 加入 PATH，请从应用菜单打开，或使用 `/usr/lib/qingfan/qingfan` 直接执行。
-
-卸载：
-
-```bash
-sudo apt remove qingfan
-```
-
-用户数据位于操作系统为应用提供的本地应用支持目录，卸载不会主动删除个人任务数据。安装包依赖 `fonts-noto-cjk`，确保干净的 Ubuntu 安装也能正确显示中文。
-
-### Linux 源码构建
-
-按 [Flutter Linux 官方文档](https://docs.flutter.dev/platform-integration/linux/setup) 安装 Flutter SDK。CI 固定 Flutter 3.47.0，开发机应尽量使用相同版本：
+安装 Flutter 3.47.0 及 Linux 桌面构建依赖（示例）：
 
 ```bash
 sudo apt update
@@ -48,18 +40,15 @@ python3 tool/patch_linux_runner.py
 flutter pub get
 flutter analyze
 flutter test
-flutter run -d linux
+flutter build linux --release
+bash tool/package_linux.sh
 ```
 
-用 `flutter build linux --release` 编译发布版，然后用 `bash tool/package_linux.sh` 生成 Debian 安装包。
+编译生成 `build/linux/x64/release/bundle/`，打包生成 `dist/qingfan_2.0.0~dev4_amd64.deb`。Linux Runner 补丁用于在 Flutter 默认窗口几何参数之外正确创建小尺寸无边框窗口，**升级 Flutter 时必须重新审核并测试该补丁**。
 
-**重要**：Flutter 3.47 的默认 Linux Runner 使用 1280×720 初始窗口。项目有校验过模板锚点的 Runner 修补脚本，必须执行，避免原生窗口拒绝缩至 104×104。将来升级 Flutter SDK 时必须重新验证补丁并重新验收实际窗口尺寸。
+### Windows 10/11 x64
 
-## 二、Windows 10/11 x64
-
-在对应 CI 中下载 `qingfan-v2-windows-installer`（测试版安装程序）或 `qingfan-v2-windows-portable`（便携压缩包）。安装程序由 Inno Setup 配置 `tool/qingfan_windows.iss` 生成，支持开始菜单、可选桌面快捷方式和正常卸载。
-
-源码构建（Windows + Visual Studio Desktop development with C++ + Flutter）：
+需要 Flutter SDK、Visual Studio 的 Desktop development with C++ 工作负载：
 
 ```powershell
 cd flutter_app
@@ -70,13 +59,11 @@ flutter test
 flutter build windows --release
 ```
 
-Windows CI 固定压缩 `build/windows/x64/runner/Release` 完整目录，而不单独分发 EXE；EXE 必须与 Flutter DLL 及资源文件保持一起。开发候选安装包尚未进行 Authenticode 代码签名。
+可执行文件位于 `build/windows/x64/runner/Release/qingfan.exe`。发布时必须连同该目录中的 DLL、`data` 等资源一起打包。CI 使用 `tool/qingfan_windows.iss` 和 Inno Setup 构建 unsigned EXE；原生窗口测试在 `tool/native_smoke_windows.ps1`。
 
-## 三、macOS
+### macOS
 
-下载 CI 的 `qingfan-v2-macos-app-unsigned`，其中有未签名的 `.dmg` 和 `.app` ZIP，**用于开发评测，不作为对外公开发行物**。正式发行仍需开发者证书签名与 Apple 公证。
-
-源码构建（Xcode、CocoaPods 和 Flutter）：
+需要 Flutter SDK、Xcode 与适用的 CocoaPods 环境：
 
 ```bash
 cd flutter_app
@@ -87,22 +74,16 @@ flutter test
 flutter build macos --release
 ```
 
-CI 构建的 `.app` 放于 `build/macos/Build/Products/Release/`。当前构建目标为 CI 所用 macOS Runner，通用 Intel/Apple Silicon 分发需进一步确认并按各架构验收。
+APP 位于 `build/macos/Build/Products/Release/qingfan.app`，原生测试脚本为 `tool/native_smoke_macos.sh`；CI 使用 `hdiutil` 生成并验证未签名 DMG。正式分发须另行处理 macOS 签名、公证和目标架构。
 
-## 四、测试与发布门槛
+## 验收范围与技术约束
 
-运行 `flutter analyze`、`flutter test`。Linux 自动验收使用 Xvfb、Openbox 和真正的 Flutter Release Runner，验证：
+当前实际窗口尺寸：主表盘 **376 × 408**、Ubuntu/macOS 迷你时钟 **104 × 104**、Windows 迷你窗 **136 × 104**（Win32 最小顶层窗口宽度限制）、展开任务/设置工作区 **714 × 510**，单位为逻辑像素。
 
-- 376×408 主表盘、104×104 迷你、768×540 任务管理及返回窗口尺寸；
-- 始终只有一个顶层窗口、重复启动的进程互斥；
-- X11 置顶报告与真实窗口尺寸，按住表盘外圈并移动鼠标后完整态/迷你态的原生窗口坐标必须变化；
-- 五种窗口形态的截图是否空白；截图保存在 CI 附件中；
-- Debian 包的安装、桌面入口和正常卸载。
+[CI #39745725008](https://github.com/jiaquan301/qingfan/actions/runs/39745725008) 已在 Ubuntu、Windows、macOS 运行 `flutter analyze`、`flutter test`、Release 构建与原生窗口验收，并分别验证 DEB 安装/启动/卸载、Windows 安装器安装/启动/卸载、macOS DMG 挂载/内容检查/卸载。新增的休息阶段回归测试涵盖中途跳过、旧休息时间清理、任务切换、表盘入口、阶段自然到时的刷新与持久化。
 
-Windows/macOS CI 分别真实编译 Release 和安装候选制品，但无 GUI 真机测试时**不能宣称已完成用户桌面验收**。Ubuntu GNOME/X11、Wayland 与高 DPI/多显示器真实场景仍需手工按验收清单测试。
+**未覆盖**所有用户物理设备、Wayland 合成器、外接显示器与各档系统缩放。Wayland 对强制置顶、拖动和透明绘制可能施加桌面环境限制。Linux 运行时透明边缘仍需图形合成环境支持。
 
-## 五、架构与发布原则
+架构：`lib/domain/` 维护计时状态机；`lib/application/` 维护任务与界面状态；`lib/infrastructure/` 负责本地存储、单例锁和系统窗口；`lib/presentation/` 实现 Flutter 界面。旧 GTK3 版本仍保留作为回退基线。
 
-`lib/domain` 包含与 GUI 解耦的计时逻辑，`lib/application` 管理任务与界面状态，`lib/infrastructure` 统一窗口、单例和本地存储，`lib/presentation` 只包含 Flutter 界面。
-
-Flutter V2 作为正式技术路线维护，但 GTK3 V1.1 在 V2 的 P0 阻断项清零前维持稳定发布入口。不能以构建或 Xvfb 截图代替 Wayland 原生置顶与三个操作系统的真实桌面验收。
+更多资料：[产品需求](../docs/v2-product-prd.md) · [技术验收规范](../docs/v2-engineering-acceptance.md) · [PR #4](https://github.com/jiaquan301/qingfan/pull/4)
