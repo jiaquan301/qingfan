@@ -358,7 +358,9 @@ class _TaskDrawerState extends State<TaskDrawer> {
               c.engine.isRunning ? Icons.arrow_back_rounded : Icons.play_arrow_rounded,
               size: 19,
             ),
-            label: Text(c.engine.isRunning ? '返回专注' : '开始专注'),
+            label: Text(c.engine.phase != FocusPhase.focus
+                ? '跳过休息并开始专注'
+                : (c.engine.isRunning ? '返回专注' : '开始专注')),
           ),
         ],
         ),
