@@ -129,7 +129,7 @@ class _CrystalClockState extends State<CrystalClock> {
                                 ),
                               ),
                               if (!mini) ...[
-                                const SizedBox(height: 12),
+                                SizedBox(height: c.engine.phase == FocusPhase.focus ? 12 : 4),
                                 ConstrainedBox(
                                   constraints: const BoxConstraints(maxWidth: 210),
                                   child: c.engine.phase == FocusPhase.focus
@@ -149,9 +149,11 @@ class _CrystalClockState extends State<CrystalClock> {
                                           onPressed: c.startFocus,
                                           style: TextButton.styleFrom(
                                             foregroundColor: _accent,
-                                            minimumSize: const Size(160, 32),
+                                            minimumSize: const Size(160, 28),
+                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                            visualDensity: VisualDensity.compact,
                                             padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 2),
+                                                horizontal: 8, vertical: 0),
                                           ),
                                           child: const Text(
                                             '跳过休息 · 开始专注',
