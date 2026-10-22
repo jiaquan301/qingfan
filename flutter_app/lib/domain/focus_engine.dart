@@ -96,7 +96,19 @@ class FocusEngine {
     return didFinishFocus;
   }
 
+  /// Abandons the current break and prepares a fresh focus period.
+  /// Completed rounds and per-task credits are never changed by skipping.
+  void skipBreak() {
+    if (phase == FocusPhase.focus) return;
+    phase = FocusPhase.focus;
+    _remainingAtStart = phaseDurationMillis;
+    runState = RunState.idle;
+    _sessionSerial++;
+  }
+
+  /// Restarting a round always returns to focus, even during a break.
   void reset() {
+    phase = FocusPhase.focus;
     _remainingAtStart = phaseDurationMillis;
     runState = RunState.idle;
     _sessionSerial++;
@@ -119,11 +131,20 @@ class FocusEngine {
       (p) => p.name == json['phase'],
       orElse: () => FocusPhase.focus,
     );
-    final remaining = _integer(json['remainingMillis'], phaseDurationMillis);
-    _remainingAtStart = remaining.clamp(0, phaseDurationMillis);
-    runState = _remainingAtStart < phaseDurationMillis
-        ? RunState.paused
-        : RunState.idle;
+    // A break is optional. Never strand a newly opened app in the old
+    // break countdown; preserve completed rounds but offer fresh focus.
+    // Interrupted focus, unlike interrupted break, remains paused.
+    if (phase != FocusPhase.focus) {
+      phase = FocusPhase.focus;
+      _remainingAtStart = phaseDurationMillis;
+      runState = RunState.idle;
+    } else {
+      final remaining = _integer(json['remainingMillis'], phaseDurationMillis);
+      _remainingAtStart = remaining.clamp(0, phaseDurationMillis);
+      runState = _remainingAtStart < phaseDurationMillis
+          ? RunState.paused
+          : RunState.idle;
+    }
     _sessionSerial++;
   }
 
