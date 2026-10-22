@@ -6,8 +6,16 @@ import 'package:qingfan/main.dart' show QingfanApp;
 import 'package:qingfan/infrastructure/window_bridge.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qingfan/application/qingfan_controller.dart';
+import 'package:qingfan/domain/focus_engine.dart';
 import 'package:qingfan/infrastructure/local_store.dart';
 import 'package:qingfan/presentation/task_drawer.dart';
+
+class _FakeClock implements MillisClock {
+  int current = 0;
+  @override
+  int get elapsedMillis => current;
+  void advance(int ms) => current += ms;
+}
 
 void main() {
   test('Complete, undo, restore and delete are distinct from selecting', () {
@@ -97,6 +105,132 @@ void main() {
     expect(b.engine.longBreakMinutes, 20);
     expect(b.alwaysOnTop, isTrue);
     b.dispose();
+  });
+
+  test('Persisted unfinished break reopens as idle focus with rounds and task intact', () async {
+    final directory = await Directory.systemTemp.createTemp('qingfan-break-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = LocalStore(testDirectory: directory);
+    final clock = _FakeClock();
+    final a = QingfanController(
+      store: store,
+      engine: FocusEngine(clock: clock, focusMinutes: 1, shortBreakMinutes: 5),
+    );
+    a.addTask('完成青番测试');
+    a.startFocus();
+    clock.advance(60000);
+    expect(a.engine.tick(), true);
+    a.engine.toggle(); // Start the break.
+    clock.advance(28000);
+    await a.flush();
+    a.dispose();
+
+    final b = QingfanController(store: store);
+    await b.load();
+    expect(b.engine.phase, FocusPhase.focus);
+    expect(b.engine.runState, RunState.idle);
+    expect(b.engine.remainingMillis, 60000);
+    expect(b.engine.completedRounds, 1);
+    expect(b.selectedTask?.title, '完成青番测试');
+    b.startFocus();
+    expect(b.engine.isRunning, true);
+    b.dispose();
+  });
+
+  testWidgets('Natural break expiry repaints and persists the next focus phase', (tester) async {
+    final directory = await Directory.systemTemp.createTemp('qingfan-expiry-');
+    addTearDown(() => directory.delete(recursive: true));
+    final clock = _FakeClock();
+    final store = LocalStore(testDirectory: directory);
+    final c = QingfanController(
+      store: store,
+      engine: FocusEngine(clock: clock, focusMinutes: 1, shortBreakMinutes: 1),
+    );
+    var changes = 0;
+    c.addListener(() => changes++);
+    c.startFocus();
+    clock.advance(60000);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.engine.phase, FocusPhase.shortBreak);
+    expect(c.engine.completedRounds, 1);
+    c.toggleFocus();
+    clock.advance(60000);
+    final before = changes;
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(c.engine.phase, FocusPhase.focus);
+    expect(c.engine.runState, RunState.idle);
+    expect(changes, greaterThan(before), reason: 'expired break must refresh UI');
+    await c.flush();
+    final saved = await store.load();
+    expect((saved!['session'] as Map)['phase'], 'focus');
+    expect((saved['session'] as Map)['completedRounds'], 1);
+    c.dispose();
+  });
+
+  testWidgets('Full dial offers one-click skip rest then starts focus', (tester) async {
+    final clock = _FakeClock();
+    final c = QingfanController(
+        engine: FocusEngine(clock: clock, focusMinutes: 1));
+    c.startFocus();
+    clock.advance(60000);
+    expect(c.engine.tick(), isTrue);
+    await tester.pumpWidget(QingfanApp(
+        controller: c, bridge: DesktopWindowBridge()));
+    await tester.pump();
+    expect(find.byKey(const Key('skipBreakStart')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('skipBreakStart')));
+    await tester.pump();
+    expect(c.engine.phase, FocusPhase.focus);
+    expect(c.engine.isRunning, isTrue);
+    expect(c.engine.completedRounds, 1);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
+  testWidgets('Task list Start during rest switches selected task into focus', (tester) async {
+    final clock = _FakeClock();
+    final c = QingfanController(
+        engine: FocusEngine(clock: clock, focusMinutes: 1));
+    c.addTask('旧任务');
+    c.addTask('新任务');
+    c.startFocus();
+    clock.advance(60000);
+    expect(c.engine.tick(), true);
+    expect(c.selectTask(c.pending.last.id), true);
+    c.openPanel(OpenPanel.tasks);
+    await tester.pumpWidget(QingfanApp(
+        controller: c, bridge: DesktopWindowBridge()));
+    await tester.pump();
+    expect(find.text('跳过休息并开始专注'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('drawerStartFocus')));
+    await tester.pump();
+    expect(c.engine.phase, FocusPhase.focus);
+    expect(c.engine.isRunning, true);
+    expect(c.selectedTask?.title, '新任务');
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
+  testWidgets('More menu reset during break returns to new focus round', (tester) async {
+    final clock = _FakeClock();
+    final c = QingfanController(
+        engine: FocusEngine(clock: clock, focusMinutes: 1));
+    c.startFocus();
+    clock.advance(60000);
+    expect(c.engine.tick(), true);
+    await tester.pumpWidget(QingfanApp(
+        controller: c, bridge: DesktopWindowBridge()));
+    await tester.pump();
+    await tester.tap(find.byTooltip('更多：设置、重置'));
+    await tester.pumpAndSettle();
+    expect(find.text('返回专注阶段'), findsOneWidget);
+    await tester.tap(find.text('返回专注阶段'));
+    await tester.pumpAndSettle();
+    expect(c.engine.phase, FocusPhase.focus);
+    expect(c.engine.runState, RunState.idle);
+    expect(c.engine.completedRounds, 1);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
   });
 
   test('Corrupt local JSON is quarantined rather than silently erased', () async {
