@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../application/qingfan_controller.dart';
+import '../domain/focus_engine.dart';
 
 const _ink = Color(0xFF173F34);
 const _accent = Color(0xFF38735E);
@@ -131,17 +132,35 @@ class _CrystalClockState extends State<CrystalClock> {
                                 const SizedBox(height: 12),
                                 ConstrainedBox(
                                   constraints: const BoxConstraints(maxWidth: 210),
-                                  child: Text(
-                                    c.taskTitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 11.5,
-                                      color: _accent,
-                                      fontWeight: FontWeight.w500,
-                                      letterSpacing: .3,
-                                    ),
-                                  ),
+                                  child: c.engine.phase == FocusPhase.focus
+                                      ? Text(
+                                          c.taskTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 11.5,
+                                            color: _accent,
+                                            fontWeight: FontWeight.w500,
+                                            letterSpacing: .3,
+                                          ),
+                                        )
+                                      : TextButton(
+                                          key: const Key('skipBreakStart'),
+                                          onPressed: c.startFocus,
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: _accent,
+                                            minimumSize: const Size(160, 32),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 2),
+                                          ),
+                                          child: const Text(
+                                            '跳过休息 · 开始专注',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
                                 ),
                               ],
                             ],
@@ -198,7 +217,18 @@ class _CrystalClockState extends State<CrystalClock> {
                       small: true,
                     ),
                   ),
-                ] else
+                ] else ...[
+                  if (c.engine.phase != FocusPhase.focus)
+                    Positioned(
+                      top: 4,
+                      left: 5,
+                      child: _QuietAction(
+                        label: '跳过休息并开始专注',
+                        icon: Icons.skip_next_rounded,
+                        onTap: c.startFocus,
+                        small: true,
+                      ),
+                    ),
                   Positioned(
                     top: 4,
                     right: 5,
@@ -216,6 +246,7 @@ class _CrystalClockState extends State<CrystalClock> {
                       ),
                     ),
                   ),
+                ],
               ],
             ),
           ),
