@@ -78,6 +78,103 @@ void main() {
     expect(model.tick(), isFalse);
   });
 
+  test('Skipping a short break starts fresh focus without adding a credit', () {
+    final clock = FakeClock();
+    final engine = FocusEngine(clock: clock);
+    engine.toggle();
+    clock.advance(25 * 60000);
+    expect(engine.tick(), isTrue);
+    expect(engine.phase, FocusPhase.shortBreak);
+    expect(engine.completedRounds, 1);
+
+    engine.toggle(); // Partway through the break.
+    clock.advance(18000);
+    engine.skipBreak();
+    expect(engine.phase, FocusPhase.focus);
+    expect(engine.runState, RunState.idle);
+    expect(engine.remainingMillis, 25 * 60000);
+    expect(engine.completedRounds, 1);
+    expect(engine.tick(), isFalse);
+    engine.toggle();
+    expect(engine.isRunning, isTrue);
+  });
+
+  test('Reset while resting returns to focus, including long breaks', () {
+    final engine = FocusEngine(clock: FakeClock());
+    engine.restore({
+      'phase': 'longBreak',
+      'completedRounds': 4,
+      'remainingMillis': 820000,
+      'runState': 'paused',
+    });
+    // Reopening an interrupted long break starts at fresh focus.
+    expect(engine.phase, FocusPhase.focus);
+    expect(engine.completedRounds, 4);
+    engine.toggle();
+    engine.reset();
+    expect(engine.phase, FocusPhase.focus);
+    expect(engine.runState, RunState.idle);
+    expect(engine.remainingMillis, engine.phaseDurationMillis);
+    engine.skipBreak(); // No-op when already focusing.
+    expect(engine.completedRounds, 4);
+  });
+
+  test('Restored break is never resumed from stale remaining time', () {
+    for (final phase in ['shortBreak', 'longBreak']) {
+      for (final state in ['running', 'paused', 'idle']) {
+        final engine = FocusEngine(clock: FakeClock());
+        engine.restore({
+          'phase': phase,
+          'runState': state,
+          'remainingMillis': 23000,
+          'completedRounds': 5,
+          'focusMinutes': 40,
+          'shortBreakMinutes': 7,
+          'longBreakMinutes': 20,
+        });
+        expect(engine.phase, FocusPhase.focus);
+        expect(engine.runState, RunState.idle);
+        expect(engine.remainingMillis, 40 * 60000);
+        expect(engine.completedRounds, 5);
+      }
+    }
+  });
+
+  test('Break expiry transitions to focus but never credits a new round', () {
+    final clock = FakeClock();
+    final engine = FocusEngine(clock: clock, focusMinutes: 1, shortBreakMinutes: 1);
+    engine.toggle();
+    clock.advance(60000);
+    expect(engine.tick(), isTrue);
+    expect(engine.completedRounds, 1);
+    engine.toggle();
+    clock.advance(60000);
+    expect(engine.tick(), isFalse);
+    expect(engine.phase, FocusPhase.focus);
+    expect(engine.runState, RunState.idle);
+    expect(engine.completedRounds, 1);
+    expect(engine.remainingMillis, 60000);
+  });
+
+  test('Task start during break moves directly to running focus', () {
+    final clock = FakeClock();
+    final engine = FocusEngine(clock: clock, focusMinutes: 1);
+    final c = QingfanController(engine: engine);
+    c.addTask('旧任务');
+    c.addTask('新任务');
+    c.startFocus();
+    clock.advance(60000);
+    expect(engine.tick(), isTrue);
+    expect(engine.phase, FocusPhase.shortBreak);
+    expect(c.selectTask(c.pending.last.id), isTrue);
+    c.startFocus();
+    expect(engine.phase, FocusPhase.focus);
+    expect(engine.isRunning, isTrue);
+    expect(c.selectedTask?.title, '新任务');
+    expect(engine.completedRounds, 1);
+    c.dispose();
+  });
+
   test('Reorder never loses completed tasks', () {
     final controller = QingfanController();
     controller.addTask('A');
