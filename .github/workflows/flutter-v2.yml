@@ -141,6 +141,10 @@ jobs:
             if (-not (Test-Path (Join-Path $root $_))) { throw "Windows release missing: $_" }
           }
           Write-Output "WINDOWS_RELEASE_BUNDLE_PASS"
+      - name: Native Windows release window acceptance
+        working-directory: flutter_app
+        shell: pwsh
+        run: ./tool/native_smoke_windows.ps1
       - name: Package portable candidate
         working-directory: flutter_app
         shell: pwsh
@@ -156,12 +160,32 @@ jobs:
         run: |
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" tool/qingfan_windows.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test Windows installer and uninstaller
+        working-directory: flutter_app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Get-ChildItem 'dist/qingfan-v2-windows-x64-installer-unsigned.exe').FullName
+          $location = Join-Path $env:RUNNER_TEMP 'QingfanTestInstall'
+          $setup = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$location") -PassThru -Wait
+          if ($setup.ExitCode -ne 0) { throw "Inno installer returned $($setup.ExitCode)" }
+          if (-not (Test-Path (Join-Path $location 'qingfan.exe'))) { throw 'Installed qingfan.exe missing' }
+          $uninstaller = Join-Path $location 'unins000.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Inno uninstaller missing' }
+          $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait
+          if ($remove.ExitCode -ne 0) { throw "Inno uninstaller returned $($remove.ExitCode)" }
+          if (Test-Path (Join-Path $location 'qingfan.exe')) { throw 'Windows uninstaller left executable behind' }
+          Write-Output 'WINDOWS_INSTALL_UNINSTALL_PASS'
       - name: Windows portable and installer artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qingfan-v2-windows-installer
-          path: flutter_app/dist/*.exe
-          if-no-files-found: error
+          path: |
+            flutter_app/dist/*.exe
+            flutter_app/windows-native-smoke.log
+            flutter_app/windows-native-stderr.log
+          if-no-files-found: warn
       - name: Windows portable artifact
         uses: actions/upload-artifact@v4
         with:
@@ -196,6 +220,9 @@ jobs:
       - name: macOS release bundle (unsigned)
         working-directory: flutter_app
         run: flutter build macos --release --no-pub
+      - name: Native macOS release window acceptance
+        working-directory: flutter_app
+        run: bash tool/native_smoke_macos.sh
       - name: Verify macOS app bundle
         working-directory: flutter_app
         run: |
@@ -212,11 +239,24 @@ jobs:
         working-directory: flutter_app
         run: |
           hdiutil create -volname Qingfan -srcfolder build/macos/Build/Products/Release/qingfan.app -ov -format UDZO dist/qingfan-v2-macos-unsigned.dmg
+      - name: Verify unsigned DMG can be mounted and unmounted
+        working-directory: flutter_app
+        run: |
+          volume="$RUNNER_TEMP/QingfanMount"
+          mkdir -p "$volume"
+          hdiutil attach dist/qingfan-v2-macos-unsigned.dmg -nobrowse -readonly -mountpoint "$volume"
+          trap 'hdiutil detach "$volume" -force || true' EXIT
+          test -x "$volume/qingfan.app/Contents/MacOS/qingfan"
+          hdiutil detach "$volume"
+          trap - EXIT
+          echo "MACOS_DMG_MOUNT_UNMOUNT_PASS"
       - name: macOS candidate artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qingfan-v2-macos-app-unsigned
           path: |
             flutter_app/dist/*.zip
             flutter_app/dist/*.dmg
-          if-no-files-found: error
+            flutter_app/macos-native-smoke.log
+          if-no-files-found: warn
