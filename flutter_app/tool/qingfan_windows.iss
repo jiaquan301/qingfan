@@ -1,6 +1,6 @@
-; Qingfan V2 Windows — unsigned candidate installer
+; Qingfan V3 Windows — unsigned candidate installer
 #define AppName "Qingfan"
-#define AppVersion "2.0.0-dev4"
+#define AppVersion "3.0.0-dev1"
 
 [Setup]
 AppName={#AppName}
@@ -9,7 +9,7 @@ AppPublisher=Qingfan
 DefaultDirName={autopf}\Qingfan
 DefaultGroupName=Qingfan
 OutputDir=..\dist
-OutputBaseFilename=qingfan-v2-windows-x64-installer-unsigned
+OutputBaseFilename=qingfan-v3-windows-x64-installer-unsigned
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
