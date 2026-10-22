@@ -2,7 +2,7 @@
 # Builds an installable Debian candidate from the exact Flutter release bundle.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-version="${QINGFAN_VERSION:-2.0.0~dev4}"
+version="${QINGFAN_VERSION:-3.0.0~dev1}"
 bundle="build/linux/x64/release/bundle"
 [[ -x "$bundle/qingfan" ]] || { echo "Missing Linux release bundle" >&2; exit 1; }
 command -v dpkg-deb >/dev/null
@@ -21,7 +21,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: Qingfan developers <noreply@github.com>
 Depends: libc6, libstdc++6, libgtk-3-0, libglib2.0-0, liblzma5, fonts-noto-cjk
-Description: Qingfan desktop Pomodoro focus clock (Flutter V2 candidate)
+Description: Qingfan desktop Pomodoro focus clock (Flutter V3 candidate)
  Local-first, single-window focus timer.
 EOF
 cat > "$root/usr/share/applications/qingfan.desktop" <<'EOF'
