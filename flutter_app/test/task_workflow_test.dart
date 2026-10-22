@@ -138,7 +138,8 @@ void main() {
   });
 
   testWidgets('Natural break expiry repaints and persists the next focus phase', (tester) async {
-    final directory = await Directory.systemTemp.createTemp('qingfan-expiry-');
+    // Widget tests run in fake async; create the fixture synchronously.
+    final directory = Directory.systemTemp.createTempSync('qingfan-expiry-');
     addTearDown(() => directory.delete(recursive: true));
     final clock = _FakeClock();
     final store = LocalStore(testDirectory: directory);
