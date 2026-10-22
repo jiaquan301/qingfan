@@ -28,7 +28,7 @@ inspect = subprocess.run(
 )
 print(inspect.stdout.strip())
 pathlib.Path("macos-window-inspection.log").write_text(inspect.stdout + inspect.stderr, encoding="utf-8")
-ids = re.findall(r"QINGFAN_MAC_WINDOW id=(\\d+) onscreen=true", inspect.stdout)
+ids = re.findall(r"QINGFAN_MAC_WINDOW id=(\d+) onscreen=true", inspect.stdout)
 if ids:
     shot = subprocess.run(
         ["screencapture", "-x", "-l", ids[0], "macos-native-window.png"],
