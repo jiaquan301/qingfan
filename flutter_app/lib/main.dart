@@ -173,7 +173,7 @@ Future<void> _nativeSmoke(
     }
     controller.setMode(ClockMode.mini);
     await bridge.setSurface(controller);
-    await check('mini', DesktopWindowBridge.miniSize);
+    await check('mini', bridge.sizeFor(controller.mode, controller.panel));
     await checkTopmost('mini');
     if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
       stdout.writeln('NATIVE_DRAG_READY mini');
