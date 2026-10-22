@@ -81,5 +81,14 @@ class DesktopWindowBridge {
   }
 
   Future<void> beginDrag() => windowManager.startDragging();
-  Future<void> close() => windowManager.close();
+
+  Future<void> close() async {
+    // GTK's close-request handler can race the implicit Flutter view removal
+    // during shutdown. Explicit destroy avoids reentering close-request.
+    if (Platform.isLinux) {
+      await windowManager.destroy();
+    } else {
+      await windowManager.close();
+    }
+  }
 }
