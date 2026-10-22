@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 /// Qingfan desktop design language: quiet spacing, warm porcelain, dark jade.
@@ -37,10 +39,18 @@ abstract final class QStyle {
       useMaterial3: true,
       colorScheme: seed,
       scaffoldBackgroundColor: Colors.transparent,
-      // Noto Sans CJK SC ships with Ubuntu's fonts-noto-cjk package.
-      // Other platforms use the system fallback instead of shipping fonts.
-      fontFamily: 'Noto Sans CJK SC',
-      fontFamilyFallback: const ['Noto Sans SC', 'sans-serif'],
+      // Use a Chinese-capable native system font on each desktop OS.
+      // Shipping unlicensed system font files is neither required nor permitted.
+      fontFamily: Platform.isMacOS
+          ? 'PingFang SC'
+          : Platform.isWindows
+              ? 'Microsoft YaHei UI'
+              : 'Noto Sans CJK SC',
+      fontFamilyFallback: Platform.isMacOS
+          ? const ['Hiragino Sans GB', 'Helvetica Neue']
+          : Platform.isWindows
+              ? const ['Microsoft YaHei', 'SimHei', 'Segoe UI']
+              : const ['Noto Sans SC', 'DejaVu Sans'],
       textTheme: const TextTheme(
         bodyMedium: TextStyle(fontSize: 13, height: 1.35, color: ink),
         bodyLarge: TextStyle(fontSize: 14, height: 1.35, color: ink),
