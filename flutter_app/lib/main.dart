@@ -155,6 +155,10 @@ Future<void> _nativeSmoke(
     controller.setAlwaysOnTop(true);
     await bridge.applyTopmost(controller);
     await checkTopmost('dial');
+    controller.openPanel(OpenPanel.menu);
+    await bridge.setSurface(controller);
+    await check('menu', DesktopWindowBridge.menuSize);
+    await checkTopmost('menu');
     controller.openPanel(OpenPanel.tasks);
     await bridge.setSurface(controller);
     await check('tasks', DesktopWindowBridge.panelSize);
