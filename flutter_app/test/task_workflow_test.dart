@@ -160,8 +160,11 @@ void main() {
     expect(c.engine.phase, FocusPhase.focus);
     expect(c.engine.runState, RunState.idle);
     expect(changes, greaterThan(before), reason: 'expired break must refresh UI');
-    await c.flush();
-    final saved = await store.load();
+    // testWidgets uses a fake clock: disk I/O must run in real async time.
+    final saved = await tester.runAsync(() async {
+      await c.flush();
+      return store.load();
+    });
     expect((saved!['session'] as Map)['phase'], 'focus');
     expect((saved['session'] as Map)['completedRounds'], 1);
     c.dispose();
