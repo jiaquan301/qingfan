@@ -1,34 +1,26 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-
 import '../application/qingfan_controller.dart';
 import '../domain/focus_engine.dart';
 
 const _ink = Color(0xFF173F34);
 const _accent = Color(0xFF38735E);
-const _muted = Color(0xFF80978B);
 const _surface = Color(0xFFF9FBF8);
 
-/// A restrained, single-object timepiece. Only frequent actions are visible.
-/// Ring/unused dial space initiates native OS dragging; the centre is tap-only.
+/// Always the same 104 logical-pixel circular timepiece, on every surface.
+/// At rest it paints only the remaining time and the progress ring.
+/// Standard play/pause, tasks and menu controls fade in on hover.
 class CrystalClock extends StatefulWidget {
   const CrystalClock({
     super.key,
     required this.controller,
     required this.onTasks,
-    required this.onSettings,
-    required this.onMode,
-    required this.onReset,
     required this.onDrag,
     required this.onMore,
   });
 
   final QingfanController controller;
   final VoidCallback onTasks;
-  final VoidCallback onSettings;
-  final VoidCallback onMode;
-  final VoidCallback onReset;
   final VoidCallback onDrag;
   final VoidCallback onMore;
 
@@ -42,275 +34,145 @@ class _CrystalClockState extends State<CrystalClock> {
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
-    final mini = c.mode == ClockMode.mini && c.panel == OpenPanel.none;
-    return LayoutBuilder(builder: (context, constraints) {
-      final diameter = math.max(
-        1.0,
-        math.min(
-          constraints.maxWidth - (mini ? 3 : 24),
-          constraints.maxHeight - (mini ? 3 : 24),
-        ),
-      );
-      return Center(
-        child: SizedBox.square(
-          dimension: diameter,
-          child: MouseRegion(
-            onEnter: (_) => setState(() => _hovered = true),
-            onExit: (_) => setState(() => _hovered = false),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _TimepiecePainter(
-                      progress: c.progress,
-                      opacity: c.glassOpacity,
-                      phase: c.engine.phase.name,
-                      mini: mini,
-                    ),
+    final rest = c.engine.phase == FocusPhase.rest;
+    final running = c.engine.runState == RunState.running;
+    return Center(
+      child: SizedBox(
+        key: const Key('singleDial'),
+        width: 104,
+        height: 104,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _TimepiecePainter(
+                    progress: c.progress,
+                    opacity: c.glassOpacity,
+                    rest: rest,
                   ),
                 ),
-                // Inactive dial material is a drag surface. Keeping it BELOW
-                // the centre and controls makes focus and drag independent.
-                Positioned.fill(
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.move,
-                    child: GestureDetector(
-                      key: const Key('clockDragSurface'),
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: (_) => widget.onDrag(),
-                      onSecondaryTapUp: (_) => widget.onMore(),
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
+              ),
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const Key('clockDragSurface'),
+                  behavior: HitTestBehavior.translucent,
+                  onPanStart: (_) => widget.onDrag(),
+                  onSecondaryTapUp: (_) => widget.onMore(),
                 ),
-                if (!mini)
-                  Positioned(
-                    top: diameter * .265,
-                    child: Text(
-                      c.phaseLabel,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: _muted,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                Center(
-                  child: Semantics(
-                    button: true,
-                    label: c.engine.isRunning ? '暂停专注' : '开始或继续专注',
-                    child: Tooltip(
-                      message: c.engine.isRunning ? '点击暂停' : '点击开始 / 继续',
-                      child: GestureDetector(
-                        key: const Key('clockCenter'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: c.toggleFocus,
-                        child: SizedBox(
-                          width: diameter * (mini ? .62 : .73),
-                          height: diameter * (mini ? .52 : .36),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                c.formattedTime,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: _ink,
-                                  fontSize: mini ? 19 : 60,
-                                  height: 1.03,
-                                  letterSpacing: mini ? -.8 : -2.6,
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
-                                  fontFamily: 'Noto Sans',
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              if (!mini) ...[
-                                SizedBox(height: c.engine.phase == FocusPhase.focus ? 12 : 4),
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 210),
-                                  child: c.engine.phase == FocusPhase.focus
-                                      ? Text(
-                                          c.taskTitle,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            color: _accent,
-                                            fontWeight: FontWeight.w500,
-                                            letterSpacing: .3,
-                                          ),
-                                        )
-                                      : TextButton(
-                                          key: const Key('skipBreakStart'),
-                                          onPressed: c.startFocus,
-                                          style: TextButton.styleFrom(
-                                            foregroundColor: _accent,
-                                            minimumSize: const Size(160, 28),
-                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            visualDensity: VisualDensity.compact,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 0),
-                                          ),
-                                          child: const Text(
-                                            '跳过休息 · 开始专注',
-                                            style: TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                ),
-                              ],
-                            ],
-                          ),
+              ),
+              Semantics(
+                button: !rest,
+                label: rest ? '休息自动倒计时' : (running ? '暂停专注' : '开始专注'),
+                child: GestureDetector(
+                  key: const Key('clockCenter'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: rest ? null : c.toggleFocus,
+                  child: SizedBox(
+                    width: 84,
+                    height: 48,
+                    child: Center(
+                      child: Text(
+                        c.formattedTime,
+                        maxLines: 1,
+                        style: const TextStyle(
+                          color: _ink,
+                          fontSize: 23,
+                          height: 1,
+                          letterSpacing: -1.15,
+                          fontFamily: 'Noto Sans',
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: [FontFeature.tabularFigures()],
                         ),
                       ),
                     ),
                   ),
                 ),
-                if (!mini)
+              ),
+              if (_hovered) ...[
+                Positioned(
+                  left: 8,
+                  top: 6,
+                  child: _TinyAction(
+                    tooltip: '任务清单',
+                    icon: Icons.format_list_bulleted_rounded,
+                    onPressed: widget.onTasks,
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 6,
+                  child: _TinyAction(
+                    tooltip: '更多',
+                    icon: Icons.more_horiz_rounded,
+                    onPressed: widget.onMore,
+                  ),
+                ),
+                if (!rest)
                   Positioned(
-                    bottom: diameter * .215,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(4, (index) {
-                        final done = index < c.engine.completedRounds % 4;
-                        return Container(
-                          height: 4,
-                          width: 4,
-                          margin: const EdgeInsets.symmetric(horizontal: 5.5),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: done ? _accent : const Color(0xFFBED5CA),
-                          ),
-                        );
-                      }),
+                    bottom: 4,
+                    child: _TinyAction(
+                      key: const Key('focusToggleIcon'),
+                      tooltip: running ? '暂停专注' : '开始或继续专注',
+                      icon: running ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      onPressed: c.toggleFocus,
                     ),
                   ),
-                if (!mini) ...[
-                  Positioned(
-                    left: diameter * .155,
-                    top: diameter * .115,
-                    child: _QuietAction(
-                      label: '任务清单',
-                      icon: Icons.format_list_bulleted_rounded,
-                      onTap: widget.onTasks,
-                    ),
-                  ),
-                  Positioned(
-                    right: diameter * .155,
-                    top: diameter * .115,
-                    child: _QuietAction(
-                      label: '迷你模式',
-                      icon: Icons.open_in_full_rounded,
-                      onTap: widget.onMode,
-                    ),
-                  ),
-                  Positioned(
-                    bottom: diameter * .075,
-                    child: _QuietAction(
-                      label: '更多：设置、重置',
-                      icon: Icons.more_horiz_rounded,
-                      onTap: widget.onMore,
-                      small: true,
-                    ),
-                  ),
-                ] else ...[
-                  if (c.engine.phase != FocusPhase.focus)
-                    Positioned(
-                      top: 4,
-                      left: 5,
-                      child: _QuietAction(
-                        label: '跳过休息并开始专注',
-                        icon: Icons.skip_next_rounded,
-                        onTap: c.startFocus,
-                        small: true,
-                      ),
-                    ),
-                  Positioned(
-                    top: 4,
-                    right: 5,
-                    child: IgnorePointer(
-                      ignoring: !_hovered,
-                      child: AnimatedOpacity(
-                        opacity: _hovered ? 1 : 0,
-                        duration: const Duration(milliseconds: 135),
-                        child: _QuietAction(
-                          label: '展开时钟',
-                          icon: Icons.open_in_full_rounded,
-                          onTap: widget.onMode,
-                          small: true,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
         ),
-      );
-    });
+      ),
+    );
   }
 }
 
-class _QuietAction extends StatelessWidget {
-  const _QuietAction({
-    required this.label,
+class _TinyAction extends StatelessWidget {
+  const _TinyAction({
+    super.key,
+    required this.tooltip,
     required this.icon,
-    required this.onTap,
-    this.small = false,
+    required this.onPressed,
   });
-
-  final String label;
+  final String tooltip;
   final IconData icon;
-  final VoidCallback onTap;
-  final bool small;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) => IconButton(
-        tooltip: label,
-        onPressed: onTap,
-        style: IconButton.styleFrom(
-          foregroundColor: _accent.withValues(alpha: .88),
-          hoverColor: const Color(0x253E7560),
-          highlightColor: const Color(0x183E7560),
-        ),
-        padding: EdgeInsets.zero,
-        constraints: BoxConstraints.tightFor(
-          width: small ? 32 : 40,
-          height: small ? 32 : 40,
-        ),
-        icon: Icon(icon, size: small ? 17 : 19),
-      );
+    tooltip: tooltip,
+    onPressed: onPressed,
+    icon: Icon(icon, size: 15),
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints.tightFor(width: 27, height: 24),
+    style: IconButton.styleFrom(
+      foregroundColor: _accent,
+      hoverColor: const Color(0x293E7560),
+    ),
+  );
 }
 
-/// Matte-ivory crystal and machined fine ring, not a large flat gray disc.
-/// All pixels outside the circular painter remain fully transparent.
 class _TimepiecePainter extends CustomPainter {
   const _TimepiecePainter({
     required this.progress,
     required this.opacity,
-    required this.phase,
-    required this.mini,
+    required this.rest,
   });
-
   final double progress;
   final double opacity;
-  final String phase;
-  final bool mini;
+  final bool rest;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
-    final r = size.shortestSide / 2 - (mini ? 1.8 : 3.0);
+    final r = size.shortestSide / 2 - 1.6;
     final outer = Rect.fromCircle(center: center, radius: r);
-    final fill = Paint()
-      ..shader = RadialGradient(
+    canvas.drawCircle(
+      center, r,
+      Paint()..shader = RadialGradient(
         center: const Alignment(-.33, -.42),
         radius: 1.24,
         colors: [
@@ -319,60 +181,46 @@ class _TimepiecePainter extends CustomPainter {
           const Color(0xFFEAF2ED).withValues(alpha: opacity * .93),
         ],
         stops: const [0, .58, 1],
-      ).createShader(outer);
-    canvas.drawCircle(center, r, fill);
-
-    // One continuous polished bezel instead of several competing rings.
+      ).createShader(outer),
+    );
     canvas.drawCircle(
-      center,
-      r - .95,
+      center, r - .9,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = mini ? .9 : 1.15
+        ..strokeWidth = .9
         ..color = Colors.white.withValues(alpha: .86),
     );
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: r - (mini ? 2 : 3)),
-      -math.pi * .89,
-      math.pi * .48,
-      false,
+      Rect.fromCircle(center: center, radius: r - 2),
+      -math.pi * .89, math.pi * .48, false,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = mini ? .9 : 1.45
+        ..strokeWidth = .9
         ..strokeCap = StrokeCap.round
         ..color = Colors.white.withValues(alpha: .87),
     );
-
-    final ringR = r * (mini ? .80 : .775);
-    final thickness = mini ? 2.3 : 3.2;
-    final ringRect = Rect.fromCircle(center: center, radius: ringR);
+    final ringRect = Rect.fromCircle(center: center, radius: r * .80);
     canvas.drawCircle(
-      center,
-      ringR,
+      center, r * .80,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = thickness
+        ..strokeWidth = 2.3
         ..color = const Color(0xFFD6E7DC).withValues(alpha: .75),
     );
     if (progress > 0.0001) {
       canvas.drawArc(
-        ringRect,
-        -math.pi / 2,
-        progress.clamp(0.0, 1.0) * math.pi * 2,
-        false,
+        ringRect, -math.pi / 2,
+        progress.clamp(0.0, 1.0) * math.pi * 2, false,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = thickness
+          ..strokeWidth = 2.3
           ..strokeCap = StrokeCap.round
-          ..color = phase == 'focus' ? _accent : const Color(0xFF668B94),
+          ..color = rest ? const Color(0xFF668B94) : _accent,
       );
     }
   }
 
   @override
   bool shouldRepaint(_TimepiecePainter old) =>
-      old.progress != progress ||
-      old.opacity != opacity ||
-      old.phase != phase ||
-      old.mini != mini;
+      old.progress != progress || old.opacity != opacity || old.rest != rest;
 }
