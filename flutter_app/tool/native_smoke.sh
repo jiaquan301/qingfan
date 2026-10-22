@@ -55,11 +55,11 @@ grep -q QINGFAN_ALREADY_RUNNING native-second-instance.log
 wait "$app_pid"
 echo NATIVE_SMOKE_EXIT_STATUS_PASS
 grep -q NATIVE_SMOKE_PASS native-smoke.log
-for scene in dial tasks tasks_50 settings dial_return; do
+for scene in dial menu tasks tasks_50 settings dial_return; do
   grep -q "NATIVE_SMOKE_SIZE $scene:" native-smoke.log
 done
 if [[ "${QINGFAN_NATIVE_CAPTURE:-0}" == 1 ]]; then
-  for scene in dial tasks tasks_50 settings dial_return; do
+  for scene in dial menu tasks tasks_50 settings dial_return; do
     for kind in "" "-root"; do
       file="native-shots/$scene$kind.png"
       [[ -s "$file" ]]
