@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../domain/focus_engine.dart';
 import '../infrastructure/local_store.dart';
 
-enum OpenPanel { none, tasks, settings }
+enum OpenPanel { none, tasks, settings, menu }
 
 class QingfanTask {
   QingfanTask({
