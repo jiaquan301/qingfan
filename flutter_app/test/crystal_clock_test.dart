@@ -1,86 +1,82 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:qingfan/application/qingfan_controller.dart';
+import 'package:qingfan/domain/focus_engine.dart';
 import 'package:qingfan/presentation/crystal_clock.dart';
-import 'package:qingfan/infrastructure/window_bridge.dart';
-import 'package:qingfan/main.dart' show QingfanApp;
+
+class FakeClock implements MillisClock {
+  int current = 0;
+  @override
+  int get elapsedMillis => current;
+}
 
 void main() {
-  testWidgets('Only two frequent actions appear on full dial; rare actions use menu',
+  Widget dial(QingfanController c) => MaterialApp(
+    home: Scaffold(
+      body: Center(
+        child: CrystalClock(
+          controller: c, onTasks: () {}, onDrag: () {}, onMore: () {},
+        ),
+      ),
+    ),
+  );
+
+  testWidgets('Only a 104px dial, time and ring: no task name or state text',
       (tester) async {
     final c = QingfanController();
-    await tester.pumpWidget(
-      QingfanApp(controller: c, bridge: DesktopWindowBridge()),
-    );
+    c.addTask('这段任务名称绝不能出现在表盘上');
+    await tester.pumpWidget(dial(c));
+    expect(tester.getSize(find.byKey(const Key('singleDial'))),
+        const Size(104, 104));
+    expect(find.text('25:00'), findsOneWidget);
+    expect(find.textContaining('任务名称'), findsNothing);
+    for (final word in ['专注', '休息', '正在专注', '短休息', '长休息']) {
+      expect(find.text(word), findsNothing);
+    }
+    expect(find.byTooltip('任务清单'), findsNothing);
+    await tester.tap(find.byKey(const Key('clockCenter')));
     await tester.pump();
-    expect(find.byTooltip('任务清单'), findsOneWidget);
-    expect(find.byTooltip('迷你模式'), findsOneWidget);
-    expect(find.byTooltip('设置'), findsNothing);
-    expect(find.byTooltip('重置计时'), findsNothing);
-    expect(find.byTooltip('更多：设置、重置'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('更多：设置、重置'));
-    await tester.pumpAndSettle();
-    expect(find.text('偏好设置'), findsOneWidget);
-    expect(find.text('重新开始本轮'), findsOneWidget);
-    expect(find.text('始终置顶'), findsOneWidget);
-    await tester.tap(find.text('重新开始本轮'));
-    await tester.pumpAndSettle();
-    expect(c.engine.isRunning, isFalse);
+    expect(c.engine.isRunning, true);
+    await tester.tap(find.byKey(const Key('clockCenter')));
+    await tester.pump();
+    expect(c.engine.runState, RunState.paused);
+    await tester.pumpWidget(const SizedBox());
     c.dispose();
   });
 
-  testWidgets('Cold UI opens clock and can start without task', (tester) async {
-    final controller = QingfanController();
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SizedBox(
-          width: 376,
-          height: 408,
-          child: CrystalClock(
-            controller: controller,
-            onTasks: () {},
-            onSettings: () {},
-            onMode: () {},
-            onReset: () {},
-            onDrag: () {},
-            onMore: () {},
-          ),
-        ),
-      ),
-    ));
-    expect(find.text('25:00'), findsOneWidget);
-    expect(find.text('自由专注'), findsOneWidget);
+  testWidgets('Rest automatically runs with no pause/play or skip actions',
+      (tester) async {
+    final clock = FakeClock();
+    final e = FocusEngine(clock: clock, focusMinutes: 1);
+    final c = QingfanController(engine: e);
+    c.startFocus();
+    clock.current = 60000;
+    expect(e.tick(), true);
+    await tester.pumpWidget(dial(c));
+    expect(find.text('05:00'), findsOneWidget);
+    expect(find.byKey(const Key('skipBreakStart')), findsNothing);
     await tester.tap(find.byKey(const Key('clockCenter')));
-    await tester.pump();
-    expect(controller.engine.isRunning, isTrue);
-    await tester.tap(find.byKey(const Key('clockCenter')));
-    expect(controller.engine.isRunning, isFalse);
-    controller.dispose();
+    expect(e.phase, FocusPhase.rest);
+    expect(e.runState, RunState.running);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
   });
 
-  testWidgets('Mini dial contains no big task or start button',
+  testWidgets('Play/pause action uses standard media icons only on hover',
       (tester) async {
-    final controller = QingfanController();
-    controller.setMode(ClockMode.mini);
-    await tester.pumpWidget(MaterialApp(
-      home: SizedBox(
-        width: 104,
-        height: 104,
-        child: CrystalClock(
-          controller: controller,
-          onTasks: () {},
-          onSettings: () {},
-          onMode: () {},
-          onReset: () {},
-          onDrag: () {},
-          onMore: () {},
-        ),
-      ),
-    ));
-    expect(find.text('25:00'), findsOneWidget);
-    expect(find.text('自由专注'), findsNothing);
-    expect(find.byKey(const Key('clockCenter')), findsOneWidget);
-    controller.dispose();
+    final c = QingfanController();
+    await tester.pumpWidget(dial(c));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(0, 0));
+    await mouse.moveTo(tester.getCenter(find.byKey(const Key('singleDial'))));
+    await tester.pump();
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    await tester.tap(find.byKey(const Key('focusToggleIcon')));
+    await tester.pump();
+    expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+    await mouse.removePointer();
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
   });
 }
