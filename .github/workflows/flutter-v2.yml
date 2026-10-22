@@ -1,4 +1,4 @@
-name: Qingfan Flutter V2 candidate
+name: Qingfan Flutter V3 candidate
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: qingfan-v2-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: qingfan-v3-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -90,7 +90,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qingfan-v2-ubuntu-deb
+          name: qingfan-v3-ubuntu-deb
           path: |
             flutter_app/dist/*.deb
             flutter_app/pubspec.lock
@@ -150,7 +150,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/qingfan-v2-windows-x64-unsigned.zip" -Force
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/qingfan-v3-windows-x64-unsigned.zip" -Force
       - name: Install Inno Setup compiler
         shell: pwsh
         run: choco install innosetup -y --no-progress
@@ -165,7 +165,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $installer = (Get-ChildItem 'dist/qingfan-v2-windows-x64-installer-unsigned.exe').FullName
+          $installer = (Get-ChildItem 'dist/qingfan-v3-windows-x64-installer-unsigned.exe').FullName
           $location = Join-Path $env:RUNNER_TEMP 'QingfanTestInstall'
           $setup = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$location") -PassThru -Wait
           if ($setup.ExitCode -ne 0) { throw "Inno installer returned $($setup.ExitCode)" }
@@ -181,7 +181,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qingfan-v2-windows-installer
+          name: qingfan-v3-windows-installer
           path: |
             flutter_app/dist/*.exe
             flutter_app/windows-native-smoke.log
@@ -192,7 +192,7 @@ jobs:
       - name: Windows portable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qingfan-v2-windows-portable
+          name: qingfan-v3-windows-portable
           path: flutter_app/dist/*.zip
           if-no-files-found: error
 
@@ -237,11 +237,11 @@ jobs:
         working-directory: flutter_app
         run: |
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/qingfan.app dist/qingfan-v2-macos-unsigned.zip
+          ditto -c -k --sequesterRsrc --keepParent build/macos/Build/Products/Release/qingfan.app dist/qingfan-v3-macos-unsigned.zip
       - name: macOS unsigned DMG for testing
         working-directory: flutter_app
         run: |
-          hdiutil create -volname Qingfan -srcfolder build/macos/Build/Products/Release/qingfan.app -ov -format UDZO dist/qingfan-v2-macos-unsigned.dmg
+          hdiutil create -volname Qingfan -srcfolder build/macos/Build/Products/Release/qingfan.app -ov -format UDZO dist/qingfan-v3-macos-unsigned.dmg
       - name: Verify unsigned DMG can be mounted and unmounted
         working-directory: flutter_app
         run: |
@@ -255,7 +255,7 @@ jobs:
           # macOS hosted runners occasionally return EAGAIN while DiskImages
           # services initialize; bounded retries still fail on real errors.
           for attempt in 1 2 3 4 5; do
-            if hdiutil attach dist/qingfan-v2-macos-unsigned.dmg -nobrowse -readonly -mountpoint "$volume"; then
+            if hdiutil attach dist/qingfan-v3-macos-unsigned.dmg -nobrowse -readonly -mountpoint "$volume"; then
               mounted=1
               break
             fi
@@ -271,7 +271,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qingfan-v2-macos-app-unsigned
+          name: qingfan-v3-macos-app-unsigned
           path: |
             flutter_app/dist/*.zip
             flutter_app/dist/*.dmg
