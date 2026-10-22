@@ -10,10 +10,10 @@
 
 | 系统 | 构建附件 | 安装方式 |
 | --- | --- | --- |
-| Ubuntu 22.04/24.04 x86-64 | `qingfan-v2-ubuntu-deb` | 解压后在 DEB 所在目录执行 `sudo apt install ./qingfan_2.0.0~dev4_amd64.deb` |
-| Windows 10/11 x64 | `qingfan-v2-windows-installer` | 解压后双击 `qingfan-v2-windows-x64-installer-unsigned.exe`，按向导安装 |
-| Windows 10/11 x64 便携版 | `qingfan-v2-windows-portable` | 完整解压后运行 `qingfan.exe`；不能只复制 EXE |
-| macOS 候选版 | `qingfan-v2-macos-app-unsigned` | 解压并打开 DMG，将 `qingfan.app` 复制到“应用程序” |
+| Ubuntu 22.04/24.04 x86-64 | `qingfan-v3-ubuntu-deb` | 解压后在 DEB 所在目录执行 `sudo apt install ./qingfan_3.0.0~dev1_amd64.deb` |
+| Windows 10/11 x64 | `qingfan-v3-windows-installer` | 解压后双击 `qingfan-v3-windows-x64-installer-unsigned.exe`，按向导安装 |
+| Windows 10/11 x64 便携版 | `qingfan-v3-windows-portable` | 完整解压后运行 `qingfan.exe`；不能只复制 EXE |
+| macOS 候选版 | `qingfan-v3-macos-app-unsigned` | 解压并打开 DMG，将 `qingfan.app` 复制到“应用程序” |
 
 安装完成后在系统应用菜单搜索“青番”。Ubuntu 也可用 `/usr/lib/qingfan/qingfan` 启动。
 
