@@ -9,6 +9,10 @@ import '../application/qingfan_controller.dart';
 class DesktopWindowBridge {
   static const fullSize = Size(376, 408);
   static const miniSize = Size(104, 104);
+  // Win32 enforces a minimum top-level frameless width of 136 logical pixels
+  // on the CI reference system. Keep the dial itself round and centered.
+  static const windowsMiniSize = Size(136, 104);
+  Size get effectiveMiniSize => Platform.isWindows ? windowsMiniSize : miniSize;
   // 304px clock rail (280px dial) + 410px focused task/settings workspace.
   static const panelSize = Size(714, 510);
 
@@ -18,7 +22,7 @@ class DesktopWindowBridge {
 
   Size sizeFor(ClockMode mode, OpenPanel panel) {
     if (panel != OpenPanel.none) return panelSize;
-    return mode == ClockMode.mini ? miniSize : fullSize;
+    return mode == ClockMode.mini ? effectiveMiniSize : fullSize;
   }
 
   Future<void> prepare() => windowManager.ensureInitialized();
@@ -26,7 +30,7 @@ class DesktopWindowBridge {
   Future<void> showInitial(QingfanController controller) async {
     final options = WindowOptions(
       size: sizeFor(controller.mode, controller.panel),
-      minimumSize: miniSize,
+      minimumSize: effectiveMiniSize,
       center: true,
       // The dial is a frameless translucent surface on every desktop OS.
       // Expanded panels paint their own opaque porcelain background. Linux
