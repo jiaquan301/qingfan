@@ -7,30 +7,27 @@ import '../application/qingfan_controller.dart';
 
 /// One and only one native window. All UI modes are Flutter views of it.
 class DesktopWindowBridge {
-  static const fullSize = Size(376, 408);
-  static const miniSize = Size(104, 104);
-  // Win32 enforces a minimum top-level frameless width of 136 logical pixels
-  // on the CI reference system. Keep the dial itself round and centered.
-  static const windowsMiniSize = Size(136, 104);
-  Size get effectiveMiniSize => Platform.isWindows ? windowsMiniSize : miniSize;
-  // 304px clock rail (280px dial) + 410px focused task/settings workspace.
-  static const panelSize = Size(714, 510);
+  static const dialSize = Size(104, 104);
+  // Win32 minimum frameless HWND width; circular painted dial stays 104px.
+  static const windowsDialWindowSize = Size(136, 104);
+  Size get effectiveDialWindowSize =>
+      Platform.isWindows ? windowsDialWindowSize : dialSize;
+  // Fixed 112px clock rail plus a 410px task/settings workspace.
+  static const panelSize = Size(522, 510);
 
   bool get likelyWayland =>
       Platform.isLinux &&
       Platform.environment['XDG_SESSION_TYPE']?.toLowerCase() == 'wayland';
 
-  Size sizeFor(ClockMode mode, OpenPanel panel) {
-    if (panel != OpenPanel.none) return panelSize;
-    return mode == ClockMode.mini ? effectiveMiniSize : fullSize;
-  }
+  Size sizeFor(OpenPanel panel) =>
+      panel == OpenPanel.none ? effectiveDialWindowSize : panelSize;
 
   Future<void> prepare() => windowManager.ensureInitialized();
 
   Future<void> showInitial(QingfanController controller) async {
     final options = WindowOptions(
-      size: sizeFor(controller.mode, controller.panel),
-      minimumSize: effectiveMiniSize,
+      size: sizeFor(controller.panel),
+      minimumSize: effectiveDialWindowSize,
       center: true,
       // The dial is a frameless translucent surface on every desktop OS.
       // Expanded panels paint their own opaque porcelain background. Linux
@@ -43,12 +40,12 @@ class DesktopWindowBridge {
       await windowManager.setAsFrameless();
       await windowManager.setTitle('青番');
       // Flutter's default Linux runner starts at 1280x720. Do not freeze
-      // that initial geometry before requesting the final 376x408 size.
+      // that initial geometry before requesting the final 104x104 size.
       await windowManager.setResizable(true);
-      await windowManager.setSize(sizeFor(controller.mode, controller.panel));
+      await windowManager.setSize(sizeFor(controller.panel));
       await applyTopmost(controller);
       await windowManager.show();
-      await windowManager.setSize(sizeFor(controller.mode, controller.panel));
+      await windowManager.setSize(sizeFor(controller.panel));
       // window_manager 0.5.x on Linux reverts GTK geometry to the runner's
       // default when resizable(false) is applied. Keep Linux programmatic
       // resizing functional; the pinned runner default is patched in CI.
@@ -62,7 +59,7 @@ class DesktopWindowBridge {
     // programmatic mode change; resizing nonresizable windows is
     // window-manager dependent and may silently keep the old dimensions.
     await windowManager.setResizable(true);
-    await windowManager.setSize(sizeFor(controller.mode, controller.panel));
+    await windowManager.setSize(sizeFor(controller.panel));
     if (!Platform.isLinux) await windowManager.setResizable(false);
     await applyTopmost(controller);
   }
