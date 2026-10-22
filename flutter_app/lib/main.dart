@@ -39,9 +39,7 @@ Future<void> main(List<String> args) async {
   await controller.load();
   final bridge = DesktopWindowBridge();
   await bridge.prepare();
-  // A new app session opens in the full clock, irrespective of last size.
-  // Only ONE GTK/native runner is ever created by this Flutter process.
-  controller.setMode(ClockMode.full);
+  // One native runner, one 104px dial, regardless of previous V2 mode.
   runApp(QingfanApp(
     key: _nativeAppKey,
     controller: controller,
@@ -148,42 +146,15 @@ Future<void> _nativeSmoke(
   }
 
   try {
-    await check('full', DesktopWindowBridge.fullSize);
+    await check('dial', bridge.effectiveDialWindowSize);
     if (Platform.isLinux &&
-        Platform.environment['QINGFAN_NATIVE_CAPTURE'] == '1') {
-      final appState = _nativeAppKey.currentState;
-      if (appState == null) throw StateError('Missing Flutter app state for menu');
-      unawaited(appState._showMoreMenu());
-      // A menu route can exist before the Linux software renderer has
-      // composed it. Wait for the route and allow a complete frame.
-      await Future<void>.delayed(const Duration(milliseconds: 1400));
-      if (appState._navigatorKey.currentState?.canPop() != true) {
-        throw StateError('Native more-menu route was not presented');
-      }
-      stdout.writeln('NATIVE_MORE_MENU_ROUTE_VISIBLE');
-      await check('menu', DesktopWindowBridge.fullSize);
-      appState._navigatorKey.currentState?.pop();
-      await Future<void>.delayed(const Duration(milliseconds: 160));
+        Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
+      stdout.writeln('NATIVE_DRAG_READY dial');
+      await Future<void>.delayed(const Duration(seconds: 5));
     }
     controller.setAlwaysOnTop(true);
     await bridge.applyTopmost(controller);
-    await checkTopmost('full');
-    if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
-      stdout.writeln('NATIVE_DRAG_READY full');
-      await Future<void>.delayed(const Duration(seconds: 5));
-    }
-    controller.setMode(ClockMode.mini);
-    await bridge.setSurface(controller);
-    await check('mini', bridge.sizeFor(controller.mode, controller.panel));
-    await checkTopmost('mini');
-    if (Platform.isLinux && Platform.environment['QINGFAN_NATIVE_DRAG'] == '1') {
-      stdout.writeln('NATIVE_DRAG_READY mini');
-      await Future<void>.delayed(const Duration(seconds: 5));
-    }
-    controller.setMode(ClockMode.full);
-    await bridge.setSurface(controller);
-    await check('full_return', DesktopWindowBridge.fullSize);
-    await checkTopmost('full_return');
+    await checkTopmost('dial');
     controller.openPanel(OpenPanel.tasks);
     await bridge.setSurface(controller);
     await check('tasks', DesktopWindowBridge.panelSize);
@@ -199,27 +170,22 @@ Future<void> _nativeSmoke(
     await checkTopmost('settings');
     controller.closePanel();
     await bridge.setSurface(controller);
-    await check('close_tasks', DesktopWindowBridge.fullSize);
-    await checkTopmost('close_tasks');
+    await check('dial_return', bridge.effectiveDialWindowSize);
+    await checkTopmost('dial_return');
     controller.setAlwaysOnTop(false);
     await bridge.applyTopmost(controller);
     await Future<void>.delayed(const Duration(milliseconds: 350));
     final clearedTop = await windowManager.isAlwaysOnTop();
     stdout.writeln('NATIVE_TOPMOST_RESET reported=$clearedTop');
     if (!bridge.likelyWayland && clearedTop) {
-      throw StateError('X11 failed to clear the always-on-top state');
+      throw StateError('Failed to clear always-on-top');
     }
     stdout.writeln('NATIVE_SMOKE_TOPMOST_ALL_SURFACES_PASS');
-    stdout.writeln('NATIVE_SMOKE_PASS single-runner full mini panel topmost');
+    stdout.writeln('NATIVE_SMOKE_PASS single 104px dial and panel');
     await controller.flush();
-    // Closing the native Flutter view invokes asynchronous GTK/engine
-    // disposal. Do NOT call exit() during that process: it races engine
-    // destruction and crashes Linux with FlutterEngineRemoveView.
     await bridge.close();
-    // Closing the only GTK window ends the process. The shell harness verifies
-    // its exit status; do not emit a post-close marker from the destroyed view.
   } catch (error, trace) {
-    stderr.writeln('NATIVE_SMOKE_FAIL: $error\n$trace');
+    stderr.writeln('NATIVE_SMOKE_FAIL: $error\\n$trace');
     exitCode = 1;
     await bridge.close();
   }
@@ -251,11 +217,6 @@ class _QingfanAppState extends State<QingfanApp> {
     });
   }
 
-  void _switchMode() {
-    _surface(() => c.setMode(
-        c.mode == ClockMode.mini ? ClockMode.full : ClockMode.mini));
-  }
-
   void _showTasks() {
     _surface(() => c.openPanel(OpenPanel.tasks));
   }
@@ -276,7 +237,7 @@ class _QingfanAppState extends State<QingfanApp> {
     if (navigatorContext == null) return;
     final selected = await showMenu<String>(
       context: navigatorContext,
-      position: const RelativeRect.fromLTRB(150, 255, 55, 65),
+      position: const RelativeRect.fromLTRB(74, 62, 4, 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       color: const Color(0xFFF9FBF8),
       constraints: const BoxConstraints(minWidth: 196, maxWidth: 218),
@@ -286,18 +247,12 @@ class _QingfanAppState extends State<QingfanApp> {
           height: 42,
           child: _smallMenuItem(Icons.tune_rounded, '偏好设置'),
         ),
-        if (c.engine.phase != FocusPhase.focus)
+        if (c.engine.phase == FocusPhase.focus)
           PopupMenuItem<String>(
-            value: 'skipBreak',
+            value: 'reset',
             height: 42,
-            child: _smallMenuItem(Icons.skip_next_rounded, '跳过休息，开始专注'),
+            child: _smallMenuItem(Icons.restart_alt_rounded, '重新开始本轮'),
           ),
-        PopupMenuItem<String>(
-          value: 'reset',
-          height: 42,
-          child: _smallMenuItem(Icons.restart_alt_rounded,
-              c.engine.phase == FocusPhase.focus ? '重新开始本轮' : '返回专注阶段'),
-        ),
         PopupMenuItem<String>(
           value: 'pin',
           height: 42,
@@ -315,9 +270,6 @@ class _QingfanAppState extends State<QingfanApp> {
         break;
       case 'reset':
         await _confirmReset();
-        break;
-      case 'skipBreak':
-        c.startFocus();
         break;
       case 'pin':
         c.setAlwaysOnTop(!c.alwaysOnTop);
@@ -362,8 +314,8 @@ class _QingfanAppState extends State<QingfanApp> {
   }
 
   Future<void> _confirmReset() async {
-    if (c.engine.phase != FocusPhase.focus ||
-        (!c.engine.isRunning && !c.engine.hasPartialFocus)) {
+    if (c.engine.phase == FocusPhase.rest) return;
+    if (!c.engine.isRunning && !c.engine.hasPartialFocus) {
       c.resetFocus();
       return;
     }
@@ -413,9 +365,6 @@ class _QingfanAppState extends State<QingfanApp> {
                       CrystalClock(
                         controller: c,
                         onTasks: _showTasks,
-                        onSettings: _showSettings,
-                        onMode: _switchMode,
-                        onReset: _confirmReset,
                         onDrag: widget.bridge.beginDrag,
                         onMore: _showMoreMenu,
                       )
@@ -423,7 +372,7 @@ class _QingfanAppState extends State<QingfanApp> {
                       Row(
                         children: [
                           Container(
-                            width: 304,
+                            width: 112,
                             decoration: const BoxDecoration(
                               color: QStyle.panel,
                               border: Border(
@@ -435,9 +384,6 @@ class _QingfanAppState extends State<QingfanApp> {
                             child: CrystalClock(
                               controller: c,
                               onTasks: _closePanel,
-                              onSettings: _showSettings,
-                              onMode: _closePanel,
-                              onReset: _confirmReset,
                               onDrag: widget.bridge.beginDrag,
                               onMore: _showMoreMenu,
                             ),
