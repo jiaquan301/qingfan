@@ -1,4 +1,4 @@
-name: Qingfan Flutter V3 candidate
+name: Qingfan Flutter V3 (Ubuntu 22.04 + macOS)
 
 on:
   pull_request:
@@ -35,7 +35,7 @@ jobs:
       - name: Reproducibly generate Flutter desktop runners
         working-directory: flutter_app
         run: |
-          flutter create --no-pub --project-name qingfan --platforms=linux,windows,macos .
+          flutter create --no-pub --project-name qingfan --platforms=linux,macos .
           python3 tool/patch_linux_runner.py
           flutter pub get
       - name: Verify committed dependency lock is reproducible
@@ -98,103 +98,6 @@ jobs:
             flutter_app/package-smoke.log
             flutter_app/native-shots/*.png
           if-no-files-found: warn
-
-  windows:
-    name: Windows native release and installer acceptance
-    runs-on: windows-latest
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.0'
-          channel: stable
-          cache: true
-      - name: Generate pinned Windows runner
-        working-directory: flutter_app
-        run: |
-          flutter create --no-pub --project-name qingfan --platforms=windows .
-          flutter pub get
-      - name: Verify Windows dependency lock
-        working-directory: flutter_app
-        shell: pwsh
-        run: |
-          git diff --exit-code -- pubspec.lock
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Analyze and run tests
-        working-directory: flutter_app
-        shell: pwsh
-        run: |
-          flutter analyze --no-pub
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          flutter test --no-pub
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Windows x64 release bundle
-        working-directory: flutter_app
-        run: flutter build windows --release --no-pub
-      - name: Verify Windows release bundle
-        working-directory: flutter_app
-        shell: pwsh
-        run: |
-          $root = "build/windows/x64/runner/Release"
-          @("qingfan.exe", "flutter_windows.dll", "data/flutter_assets") | ForEach-Object {
-            if (-not (Test-Path (Join-Path $root $_))) { throw "Windows release missing: $_" }
-          }
-          Write-Output "WINDOWS_RELEASE_BUNDLE_PASS"
-      - name: Native Windows release window acceptance
-        working-directory: flutter_app
-        shell: pwsh
-        run: ./tool/native_smoke_windows.ps1
-      - name: Package portable candidate
-        working-directory: flutter_app
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "dist/qingfan-v3-windows-x64-unsigned.zip" -Force
-      - name: Install Inno Setup compiler
-        shell: pwsh
-        run: choco install innosetup -y --no-progress
-      - name: Windows installer (unsigned test candidate)
-        working-directory: flutter_app
-        shell: pwsh
-        run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" tool/qingfan_windows.iss
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Test Windows installer and uninstaller
-        working-directory: flutter_app
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $installer = (Get-ChildItem 'dist/qingfan-v3-windows-x64-installer-unsigned.exe').FullName
-          $location = Join-Path $env:RUNNER_TEMP 'QingfanTestInstall'
-          $setup = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$location") -PassThru -Wait
-          if ($setup.ExitCode -ne 0) { throw "Inno installer returned $($setup.ExitCode)" }
-          if (-not (Test-Path (Join-Path $location 'qingfan.exe'))) { throw 'Installed qingfan.exe missing' }
-          ./tool/native_smoke_windows.ps1 -Executable (Join-Path $location 'qingfan.exe')
-          $uninstaller = Join-Path $location 'unins000.exe'
-          if (-not (Test-Path $uninstaller)) { throw 'Inno uninstaller missing' }
-          $remove = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait
-          if ($remove.ExitCode -ne 0) { throw "Inno uninstaller returned $($remove.ExitCode)" }
-          if (Test-Path (Join-Path $location 'qingfan.exe')) { throw 'Windows uninstaller left executable behind' }
-          Write-Output 'WINDOWS_INSTALL_UNINSTALL_PASS'
-      - name: Windows portable and installer artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qingfan-v3-windows-installer
-          path: |
-            flutter_app/dist/*.exe
-            flutter_app/windows-native-smoke.log
-            flutter_app/windows-native-stderr.log
-            flutter_app/windows-native-desktop.png
-            flutter_app/windows-native-window.png
-          if-no-files-found: warn
-      - name: Windows portable artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: qingfan-v3-windows-portable
-          path: flutter_app/dist/*.zip
-          if-no-files-found: error
 
   macos:
     name: macOS native release and DMG acceptance
