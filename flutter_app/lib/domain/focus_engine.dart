@@ -23,7 +23,8 @@ class FocusEngine {
     this.focusMinutes = 25,
     this.restMinutes = 5,
   }) : _clock = clock ?? SystemMillisClock() {
-    _remainingAtStart = phaseDurationMillis;
+    _intervalDurationMillis = focusMinutes * 60000;
+    _remainingAtStart = _intervalDurationMillis;
   }
 
   final MillisClock _clock;
@@ -33,13 +34,14 @@ class FocusEngine {
   FocusPhase phase = FocusPhase.focus;
   RunState runState = RunState.idle;
 
+  // Latched duration of the active interval. Preferences apply next time.
+  int _intervalDurationMillis = 0;
   int _remainingAtStart = 0;
   int _startedAt = 0;
   int _sessionSerial = 0;
   int _lastFinishedSession = -1;
 
-  int get phaseDurationMillis =>
-      (phase == FocusPhase.focus ? focusMinutes : restMinutes) * 60000;
+  int get phaseDurationMillis => _intervalDurationMillis;
 
   int get remainingMillis {
     if (runState != RunState.running) return _remainingAtStart;
@@ -74,7 +76,8 @@ class FocusEngine {
       final overdue = math.max(0, _clock.elapsedMillis - _startedAt -
           _remainingAtStart);
       phase = FocusPhase.rest;
-      _remainingAtStart = phaseDurationMillis;
+      _intervalDurationMillis = restMinutes * 60000;
+      _remainingAtStart = _intervalDurationMillis;
       _startedAt = _clock.elapsedMillis - overdue;
       runState = RunState.running;
       _sessionSerial++;
@@ -87,7 +90,8 @@ class FocusEngine {
 
   void _finishRest() {
     phase = FocusPhase.focus;
-    _remainingAtStart = phaseDurationMillis;
+    _intervalDurationMillis = focusMinutes * 60000;
+    _remainingAtStart = _intervalDurationMillis;
     runState = RunState.idle;
     _sessionSerial++;
   }
@@ -102,7 +106,8 @@ class FocusEngine {
   /// Restart current focus only; no restart or pause action during rest.
   void reset() {
     if (phase == FocusPhase.rest) return;
-    _remainingAtStart = phaseDurationMillis;
+    _intervalDurationMillis = focusMinutes * 60000;
+    _remainingAtStart = _intervalDurationMillis;
     runState = RunState.idle;
     _sessionSerial++;
   }
@@ -111,7 +116,10 @@ class FocusEngine {
   void configure({int? focus, int? rest}) {
     if (focus != null) focusMinutes = focus.clamp(1, 180);
     if (rest != null) restMinutes = rest.clamp(1, 180);
-    if (runState == RunState.idle) _remainingAtStart = phaseDurationMillis;
+    if (runState == RunState.idle) {
+      _intervalDurationMillis = focusMinutes * 60000;
+      _remainingAtStart = _intervalDurationMillis;
+    }
   }
 
   /// Backwards-compatible V2 migration: shortBreak maps to rest. Both old
@@ -125,12 +133,20 @@ class FocusEngine {
         .contains(json['phase']);
     phase = FocusPhase.focus;
     if (wasRest) {
-      _remainingAtStart = phaseDurationMillis;
+      _intervalDurationMillis = focusMinutes * 60000;
+      _remainingAtStart = _intervalDurationMillis;
       runState = RunState.idle;
     } else {
-      final remaining = _integer(json['remainingMillis'], phaseDurationMillis);
-      _remainingAtStart = remaining.clamp(0, phaseDurationMillis);
-      runState = _remainingAtStart < phaseDurationMillis
+      // V2 files lack a latched interval. Keep any saved remaining time,
+      // even if preferences were changed during the interrupted session.
+      final savedRemaining = _integer(
+          json['remainingMillis'], focusMinutes * 60000);
+      final savedDuration = _integer(
+          json['intervalDurationMillis'], focusMinutes * 60000);
+      _intervalDurationMillis =
+          math.max(savedRemaining, savedDuration.clamp(60000, 180 * 60000));
+      _remainingAtStart = savedRemaining.clamp(0, _intervalDurationMillis);
+      runState = _remainingAtStart < _intervalDurationMillis
           ? RunState.paused : RunState.idle;
     }
     _sessionSerial++;
@@ -139,6 +155,7 @@ class FocusEngine {
   Map<String, dynamic> toJson() => {
     'focusMinutes': focusMinutes,
     'restMinutes': restMinutes,
+    'intervalDurationMillis': _intervalDurationMillis,
     'completedRounds': completedRounds,
     'phase': phase.name,
     'runState': runState == RunState.running ? 'paused' : runState.name,
