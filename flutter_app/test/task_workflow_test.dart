@@ -169,6 +169,33 @@ void main() {
     c.dispose();
   });
 
+  testWidgets('Delete current task from drawer while rest is running', (tester) async {
+    final clock = _FakeClock();
+    final c = QingfanController(
+      engine: FocusEngine(clock: clock, focusMinutes: 1, restMinutes: 5),
+    );
+    c.addTask('休息时可删除');
+    c.addTask('下一个任务');
+    final first = c.selectedTaskId!;
+    c.startFocus();
+    clock.advance(60000);
+    expect(c.engine.tick(), true);
+    c.openPanel(OpenPanel.tasks);
+    await tester.pumpWidget(
+      QingfanApp(controller: c, bridge: DesktopWindowBridge()),
+    );
+    await tester.pump();
+    await tester.tap(find.byTooltip('任务操作').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除').last);
+    await tester.pumpAndSettle();
+    expect(c.tasks.where((t) => t.id == first), isEmpty);
+    expect(c.engine.phase, FocusPhase.rest);
+    expect(c.engine.runState, RunState.running);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
   testWidgets('Rest has no skip action or pause affordance', (tester) async {
     final clock = _FakeClock();
     final c = QingfanController(engine: FocusEngine(clock: clock, focusMinutes: 1));
