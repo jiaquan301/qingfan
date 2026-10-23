@@ -375,7 +375,8 @@ class _TaskDrawerState extends State<TaskDrawer> {
 
   Future<void> _delete(QingfanTask task) async {
     final c = widget.controller;
-    if (task.id == c.selectedTaskId && c.engine.isRunning) {
+    if (task.id == c.selectedTaskId &&
+        c.engine.isRunning && c.engine.phase == FocusPhase.focus) {
       _message('请先暂停当前专注，再删除任务');
       return;
     }
