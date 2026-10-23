@@ -1,0 +1,84 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:qingfan/application/qingfan_controller.dart';
+import 'package:qingfan/presentation/crystal_clock.dart';
+import 'package:qingfan/presentation/task_drawer.dart';
+
+Widget _clock(QingfanController c, VoidCallback onDrag) => MaterialApp(
+  home: Scaffold(
+    body: SizedBox(
+      width: 104, height: 104,
+      child: CrystalClock(
+        controller: c,
+        onTasks: () {},
+        onDrag: onDrag,
+        onMore: () {},
+      ),
+    ),
+  ),
+);
+
+void main() {
+  testWidgets('Single 104px dial ring supports dragging without toggling timer',
+      (tester) async {
+    final c = QingfanController();
+    var drags = 0;
+    await tester.pumpWidget(_clock(c, () => drags++));
+    final ring = tester.getRect(find.byKey(const Key('clockDragSurface')));
+    final start = Offset(ring.center.dx, ring.top + 5);
+    final gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(35, 20));
+    await tester.pump();
+    await gesture.up();
+    expect(drags, 1);
+    final side = Offset(ring.left + 6, ring.center.dy);
+    final next = await tester.startGesture(side);
+    await next.moveBy(const Offset(32, 12));
+    await tester.pump();
+    await next.up();
+    expect(drags, 2);
+
+    // A click in the central action toggles focus, NOT window dragging.
+    await tester.tap(find.byKey(const Key('clockCenter')));
+    expect(c.engine.isRunning, true);
+    expect(drags, 2);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+
+  testWidgets('Undo strip disappears after seven seconds, without SnackBar',
+      (tester) async {
+    final c = QingfanController();
+    c.addTask('仍在专注');
+    c.addTask('要删除');
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 450,
+          height: 540,
+          child: TaskDrawer(controller: c, onClose: () {}, onStart: () {}),
+        ),
+      ),
+    ));
+    expect(c.deleteTask(c.pending.last.id), true);
+    await tester.pump();
+    expect(find.byKey(const Key('undoTaskBanner')), findsOneWidget);
+    expect(find.text('任务已删除'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    await tester.pump(const Duration(seconds: 8));
+    await tester.pump();
+    expect(find.byKey(const Key('undoTaskBanner')), findsNothing);
+    expect(c.canUndo, false);
+
+    c.addTask('第二项');
+    expect(c.deleteTask(c.pending.last.id), true);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('undoTaskAction')));
+    await tester.pump();
+    expect(c.canUndo, false);
+    expect(c.pending.map((t) => t.title), contains('第二项'));
+    expect(find.byKey(const Key('undoTaskBanner')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+  });
+}
