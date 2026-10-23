@@ -164,6 +164,71 @@ void main() {
     expect(e.remainingMillis, 40 * 60000);
   });
 
+  test('Changing focus preference preserves active interval progress baseline', () {
+    final clock = FakeClock();
+    final engine = FocusEngine(clock: clock, focusMinutes: 25);
+    engine.startFocus();
+    clock.advance(5 * 60000);
+    final remaining = engine.remainingMillis;
+    final progress = 1 - remaining / engine.phaseDurationMillis;
+    engine.configure(focus: 45, rest: 8);
+    expect(engine.remainingMillis, remaining);
+    expect(engine.phaseDurationMillis, 25 * 60000);
+    expect(1 - engine.remainingMillis / engine.phaseDurationMillis, progress);
+    final saved = engine.toJson();
+    final restored = FocusEngine(clock: FakeClock());
+    restored.restore(saved);
+    expect(restored.runState, RunState.paused);
+    expect(restored.remainingMillis, remaining);
+    expect(restored.phaseDurationMillis, 25 * 60000);
+    expect(restored.focusMinutes, 45);
+    restored.reset();
+    expect(restored.phaseDurationMillis, 45 * 60000);
+  });
+
+  test('Changing rest preference preserves running rest progress baseline', () {
+    final clock = FakeClock();
+    final engine = FocusEngine(clock: clock, focusMinutes: 1, restMinutes: 5);
+    engine.startFocus();
+    clock.advance(60000);
+    expect(engine.tick(), isTrue);
+    clock.advance(60000);
+    final remaining = engine.remainingMillis;
+    engine.configure(rest: 9);
+    expect(engine.phase, FocusPhase.rest);
+    expect(engine.phaseDurationMillis, 5 * 60000);
+    expect(engine.remainingMillis, remaining);
+    clock.advance(remaining);
+    expect(engine.tick(), isFalse);
+    expect(engine.phase, FocusPhase.focus);
+    engine.startFocus();
+    clock.advance(60000);
+    expect(engine.tick(), isTrue);
+    expect(engine.phaseDurationMillis, 9 * 60000);
+  });
+
+  test('Selected task can be deleted and undone during automatic rest', () {
+    final clock = FakeClock();
+    final engine = FocusEngine(clock: clock, focusMinutes: 1, restMinutes: 5);
+    final controller = QingfanController(engine: engine);
+    controller.addTask('第一项');
+    controller.addTask('第二项');
+    final first = controller.selectedTaskId!;
+    controller.startFocus();
+    clock.advance(60000);
+    expect(engine.tick(), isTrue);
+    expect(engine.phase, FocusPhase.rest);
+    expect(controller.deleteTask(first), isTrue);
+    expect(engine.phase, FocusPhase.rest);
+    expect(engine.isRunning, isTrue);
+    expect(controller.selectedTask?.title, '第二项');
+    expect(controller.undoTaskChange(), isTrue);
+    expect(engine.phase, FocusPhase.rest);
+    expect(engine.isRunning, isTrue);
+    expect(controller.pending.map((t) => t.title), contains('第一项'));
+    controller.dispose();
+  });
+
   test('Reorder never loses completed tasks', () {
     final controller = QingfanController();
     controller.addTask('A');
